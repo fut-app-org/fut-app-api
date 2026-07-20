@@ -73,7 +73,7 @@ jobs:
           ssh kvm2 '
             set -eu
             if [ ! -d /opt/fut-app-api/.git ]; then
-              git clone git@github.com:fut-app-org/fut-app-api.git /opt/fut-app-api
+              git clone https://github.com/fut-app-org/fut-app-api.git /opt/fut-app-api
             fi
             cd /opt/fut-app-api
             git fetch origin main
