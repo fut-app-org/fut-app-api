@@ -1,0 +1,55 @@
+name: fut-app-api
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-futapp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+      POSTGRES_DB: ${POSTGRES_DB:-futapp}
+      TZ: America/Sao_Paulo
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-futapp}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-futapp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-futapp}?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      ENV: production
+      PORT: 8080
+      MEDIA_DIR: /data/media
+      SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administrador}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@futdarapaziada.local}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      TZ: America/Sao_Paulo
+    volumes:
+      - media-data:/data/media
+    networks:
+      - default
+      - fut-app
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/api/healthz']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  postgres-data:
+  media-data:
+
+networks:
+  fut-app:
+    external: true
+    name: fut-app

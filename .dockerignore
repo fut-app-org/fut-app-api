@@ -1,0 +1,7 @@
+.env
+.git
+data/
+bin/
+coverage.out
+README.md
+BACKEND_SPEC.md

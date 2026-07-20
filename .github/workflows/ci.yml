@@ -1,0 +1,85 @@
+name: CI and deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fut-app-api-production
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.3'
+          cache-dependency-path: go.sum
+      - run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      - run: go test ./...
+      - uses: dominikh/staticcheck-action@v1
+        with:
+          version: latest
+          install-go: false
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_USER: futapp
+      POSTGRES_PASSWORD: ci-only
+      POSTGRES_DB: futapp
+      JWT_SECRET: ci-only-secret
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config
+      - run: docker compose build
+
+  deploy:
+    needs: [backend, compose]
+    if: github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.KVM2_DEPLOY_SSH_PRIVATE_KEY }}
+      - name: Install cloudflared
+        run: |
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o "$RUNNER_TEMP/cloudflared"
+          sudo install -m 0755 "$RUNNER_TEMP/cloudflared" /usr/local/bin/cloudflared
+      - name: Configure SSH through Cloudflare Access
+        run: |
+          mkdir -p ~/.ssh
+          cat >> ~/.ssh/config <<'EOF'
+          Host kvm2
+            HostName 187.127.34.186
+            User root
+            ProxyCommand cloudflared access ssh --hostname ssh.devarthur.com.br
+            StrictHostKeyChecking accept-new
+          EOF
+      - name: Deploy API and database
+        run: |
+          ssh kvm2 '
+            set -eu
+            if [ ! -d /opt/fut-app-api/.git ]; then
+              git clone git@github.com:fut-app-org/fut-app-api.git /opt/fut-app-api
+            fi
+            cd /opt/fut-app-api
+            git fetch origin main
+            git reset --hard origin/main
+            docker network inspect fut-app >/dev/null 2>&1 || docker network create fut-app
+            docker compose up -d --build --remove-orphans
+            docker compose ps
+            docker compose exec -T api wget -qO- http://localhost:8080/api/healthz
+          '
