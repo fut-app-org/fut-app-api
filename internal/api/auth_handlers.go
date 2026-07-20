@@ -123,6 +123,10 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, "senha atual incorreta")
 			return
 		}
+		if err := auth.ValidatePassword(*body.Password); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 		newHash, err := auth.HashPassword(*body.Password)
 		if err != nil {
 			writeStoreError(w, err)
@@ -203,8 +207,12 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	body.Name = strings.TrimSpace(body.Name)
 	body.Email = strings.TrimSpace(strings.ToLower(body.Email))
-	if body.Name == "" || body.Email == "" || len(body.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "nome, e-mail e senha (mínimo 8 caracteres) são obrigatórios")
+	if body.Name == "" || body.Email == "" {
+		writeError(w, http.StatusBadRequest, "nome e e-mail são obrigatórios")
+		return
+	}
+	if err := auth.ValidatePassword(body.Password); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

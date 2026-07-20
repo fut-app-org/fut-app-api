@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -58,11 +59,18 @@ func seedAdmin(ctx context.Context, cfg config.Config, st *store.Store) error {
 
 	password := cfg.SeedAdminPassword
 	if password == "" {
-		buf := make([]byte, 9)
-		if _, err := rand.Read(buf); err != nil {
-			return err
+		for {
+			buf := make([]byte, 9)
+			if _, err := rand.Read(buf); err != nil {
+				return err
+			}
+			password = base64.RawURLEncoding.EncodeToString(buf)
+			if auth.ValidatePassword(password) == nil {
+				break
+			}
 		}
-		password = base64.RawURLEncoding.EncodeToString(buf)
+	} else if err := auth.ValidatePassword(password); err != nil {
+		return fmt.Errorf("senha inicial do administrador: %w", err)
 	}
 	hash, err := auth.HashPassword(password)
 	if err != nil {
