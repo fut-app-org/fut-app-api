@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)
+			r.Post("/admin/charges/{id}/whatsapp-reminder", s.handleWhatsAppReminder)
 			r.Post("/admin/charges/{id}/mark-paid", s.handleMarkPaid)
 			r.Post("/admin/charges/{id}/cancel", s.handleCancelCharge)
 			r.Post("/admin/charges/{id}/exempt", s.handleExemptCharge)
