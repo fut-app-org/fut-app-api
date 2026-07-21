@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -64,7 +65,6 @@ func (s *Server) handleGenerateCharges(w http.ResponseWriter, r *http.Request) {
 	// Guarda o total como padrão do próximo mês e agenda o lembrete de WhatsApp
 	// para um dia útil antes do vencimento.
 	_ = s.store.SetSetting(r.Context(), "monthly_total_cents", fmt.Sprint(body.TotalAmountCents))
-	s.scheduleReminders(r, batch)
 
 	s.store.LogActivity(r.Context(), &user.ID, "charges_generated",
 		fmt.Sprintf("%s gerou %d cobranças de %s para %s",
@@ -72,37 +72,91 @@ func (s *Server) handleGenerateCharges(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, batch)
 }
 
-func (s *Server) scheduleReminders(r *http.Request, batch store.ChargeBatch) {
-	due, err := time.Parse("2006-01-02", batch.DueDate)
-	if err != nil {
-		return
-	}
-	// 9h da manhã do dia útil anterior ao vencimento.
-	remindAt := busdays.SubBusinessDays(due, 1)
-	remindAt = time.Date(remindAt.Year(), remindAt.Month(), remindAt.Day(), 9, 0, 0, 0, time.Local)
+const defaultReminderTemplate = "Olá, {{nome}}. A mensalidade de {{mes_referencia}}, no valor de {{valor}}, ainda está pendente. O prazo para pagamento termina em {{data_vencimento}}."
 
-	template, errSettings := s.store.Settings(r.Context())
-	if errSettings != nil {
-		return
-	}
-	charges, err := s.store.ChargesByMonth(r.Context(), batch.ReferenceMonth)
+func (s *Server) handleWhatsAppReminder(w http.ResponseWriter, r *http.Request) {
+	charge, err := s.store.ChargeByID(r.Context(), r.PathValue("id"))
 	if err != nil {
+		writeStoreError(w, err)
 		return
 	}
-	for _, c := range charges {
-		user, err := s.store.UserByID(r.Context(), c.UserID)
-		if err != nil || user.Phone == "" {
-			continue
-		}
-		msg := template["reminder_template"]
-		msg = strings.ReplaceAll(msg, "{{nome}}", user.Name)
-		msg = strings.ReplaceAll(msg, "{{mes_referencia}}", c.ReferenceMonth)
-		msg = strings.ReplaceAll(msg, "{{valor}}", formatCentsBR(c.AmountCents))
-		msg = strings.ReplaceAll(msg, "{{data_vencimento}}", due.Format("02/01/2006"))
-		msg = strings.ReplaceAll(msg, "{{codigo_pix}}", c.PixPayload)
-		chargeID := c.ID
-		_ = s.store.ScheduleNotification(r.Context(), c.UserID, &chargeID, user.Phone, msg, remindAt)
+	if charge.Status != "pending" && charge.Status != "overdue" {
+		writeError(w, http.StatusConflict, "só é possível lembrar cobranças pendentes ou vencidas")
+		return
 	}
+
+	recipient, err := s.store.UserByID(r.Context(), charge.UserID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	phone, err := normalizeWhatsAppNumber(recipient.Phone)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	dueDate, err := time.Parse("2006-01-02", charge.DueDate)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "vencimento inválido na cobrança")
+		return
+	}
+	settings, err := s.store.Settings(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	message := reminderMessage(settings["reminder_template"], recipient.Name, charge, dueDate)
+	link := "https://wa.me/" + phone + "?text=" + url.QueryEscape(message)
+	admin := currentUser(r)
+	s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_prepared",
+		fmt.Sprintf("%s preparou lembrete de WhatsApp para %s", admin.Name, recipient.Name))
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"url":     link,
+		"message": message,
+	})
+}
+
+func reminderMessage(template, recipientName string, charge store.Charge, dueDate time.Time) string {
+	if template == "" {
+		template = defaultReminderTemplate
+	}
+	replacements := map[string]string{
+		"{{nome}}":            recipientName,
+		"{{mes_referencia}}":  charge.ReferenceMonth,
+		"{{valor}}":           formatCentsBR(charge.AmountCents),
+		"{{data_vencimento}}": dueDate.Format("02/01/2006"),
+		"{{codigo_pix}}":      charge.PixPayload,
+	}
+	for placeholder, value := range replacements {
+		template = strings.ReplaceAll(template, placeholder, value)
+	}
+	return template
+}
+
+func normalizeWhatsAppNumber(phone string) (string, error) {
+	trimmed := strings.TrimSpace(phone)
+	var digits strings.Builder
+	for _, r := range trimmed {
+		if r >= '0' && r <= '9' {
+			digits.WriteRune(r)
+		}
+	}
+	number := digits.String()
+	if (strings.HasPrefix(trimmed, "+") || strings.HasPrefix(trimmed, "00")) && !strings.HasPrefix(number, "55") {
+		return "", errors.New("informe um WhatsApp brasileiro com DDD")
+	}
+	switch len(number) {
+	case 10, 11:
+		return "55" + number, nil
+	case 12, 13:
+		if strings.HasPrefix(number, "55") {
+			return number, nil
+		}
+	}
+	return "", errors.New("informe um WhatsApp brasileiro com DDD")
 }
 
 func (s *Server) handleMarkPaid(w http.ResponseWriter, r *http.Request) {
