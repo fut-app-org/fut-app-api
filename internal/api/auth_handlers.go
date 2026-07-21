@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -54,8 +53,9 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	body.Email = strings.TrimSpace(strings.ToLower(body.Email))
 
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if !s.loginLimiter.Allow(body.Email) || !s.loginLimiter.Allow("ip:"+ip) {
+	// RemoteAddr belongs to the internal reverse proxy, so an IP limit would
+	// incorrectly combine attempts from different users behind the tunnel.
+	if !s.loginLimiter.Allow(body.Email) {
 		writeError(w, http.StatusTooManyRequests, "muitas tentativas; aguarde alguns minutos")
 		return
 	}
