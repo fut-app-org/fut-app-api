@@ -30,6 +30,10 @@ func TestCreatePixOrder(t *testing.T) {
 		if body["total_amount"] != "42.50" {
 			t.Errorf("total_amount = %v", body["total_amount"])
 		}
+		payer, ok := body["payer"].(map[string]any)
+		if !ok || payer["first_name"] != "APRO" {
+			t.Errorf("payer.first_name = %v, want APRO", payer["first_name"])
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{
@@ -50,6 +54,7 @@ func TestCreatePixOrder(t *testing.T) {
 		Amount:             "42.50",
 		ChargeID:           "charge-123",
 		PayerEmail:         "buyer@testuser.com",
+		PayerFirstName:     "APRO",
 		ExpirationDuration: "PT48H0M",
 		IdempotencyKey:     "charge-123",
 	})

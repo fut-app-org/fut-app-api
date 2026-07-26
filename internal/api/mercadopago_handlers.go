@@ -44,6 +44,16 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 		writeStoreError(w, err)
 		return
 	}
+	payerEmail := user.Email
+	payerFirstName := user.Name
+	if s.cfg.MercadoPagoTestMode {
+		if s.cfg.MercadoPagoTestBuyerEmail == "" {
+			writeError(w, http.StatusServiceUnavailable, "o buyer de teste do Mercado Pago ainda nÃ£o estÃ¡ configurado")
+			return
+		}
+		payerEmail = s.cfg.MercadoPagoTestBuyerEmail
+		payerFirstName = "APRO"
+	}
 	expiration, err := pixExpiration(time.Now(), charge.DueDate)
 	if err != nil {
 		writeError(w, http.StatusConflict, err.Error())
@@ -53,7 +63,8 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 	order, err := s.mercadoPago.CreatePixOrder(r.Context(), mercadopago.CreatePixOrderInput{
 		Amount:             amountInReais(charge.AmountCents),
 		ChargeID:           charge.ID,
-		PayerEmail:         user.Email,
+		PayerEmail:         payerEmail,
+		PayerFirstName:     payerFirstName,
 		ExpirationDuration: expiration,
 		IdempotencyKey:     "fut-app-charge-" + charge.ID,
 	})
