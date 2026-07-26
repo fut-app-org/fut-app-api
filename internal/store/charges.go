@@ -12,7 +12,7 @@ const chargeColumns = `
 	c.id, c.batch_id, c.user_id, u.name, u.role, u.avatar_color,
 	to_char(c.reference_month, 'YYYY-MM'), c.amount_cents, c.status, c.due_date::text,
 	c.paid_at, c.paid_method, c.registered_by, coalesce(r.name, ''), c.pix_payload,
-	c.pix_ticket_url, c.pix_qr_code_base64, c.created_at`
+	c.pix_ticket_url, c.pix_qr_code_base64, c.provider_order_id, c.created_at`
 
 const chargeJoins = `
 	from charges c
@@ -24,7 +24,7 @@ func scanCharge(row pgx.Row) (Charge, error) {
 	err := row.Scan(&c.ID, &c.BatchID, &c.UserID, &c.UserName, &c.UserRole, &c.AvatarColor,
 		&c.ReferenceMonth, &c.AmountCents, &c.Status, &c.DueDate,
 		&c.PaidAt, &c.PaidMethod, &c.RegisteredBy, &c.RegisteredName, &c.PixPayload,
-		&c.PixTicketURL, &c.PixQRCodeBase64, &c.CreatedAt)
+		&c.PixTicketURL, &c.PixQRCodeBase64, &c.ProviderOrderID, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
