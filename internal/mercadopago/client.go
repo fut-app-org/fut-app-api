@@ -45,6 +45,7 @@ type CreatePixOrderInput struct {
 	Amount             string
 	ChargeID           string
 	PayerEmail         string
+	PayerFirstName     string
 	ExpirationDuration string
 	IdempotencyKey     string
 }
@@ -98,7 +99,8 @@ func (c *Client) CreatePixOrder(ctx context.Context, in CreatePixOrderInput) (Or
 			} `json:"payments"`
 		} `json:"transactions"`
 		Payer struct {
-			Email string `json:"email"`
+			Email     string `json:"email"`
+			FirstName string `json:"first_name,omitempty"`
 		} `json:"payer"`
 	}{
 		Type:              "online",
@@ -121,6 +123,7 @@ func (c *Client) CreatePixOrder(ctx context.Context, in CreatePixOrderInput) (Or
 	payment.PaymentMethod.Type = "bank_transfer"
 	body.Transactions.Payments = append(body.Transactions.Payments, payment)
 	body.Payer.Email = in.PayerEmail
+	body.Payer.FirstName = in.PayerFirstName
 
 	var order Order
 	if err := c.doJSON(ctx, http.MethodPost, c.ordersURL, in.IdempotencyKey, body, &order); err != nil {
