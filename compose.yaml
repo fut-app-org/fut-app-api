@@ -35,6 +35,9 @@ services:
       MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
       MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
       MERCADO_PAGO_TEST_MODE: ${MERCADO_PAGO_TEST_MODE:-false}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      APP_URL: ${APP_URL:-https://fut.devarthur.com.br}
       TZ: America/Sao_Paulo
     volumes:
       - media-data:/data/media

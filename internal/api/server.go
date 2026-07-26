@@ -10,23 +10,28 @@ import (
 
 	"futdarapaziada/api/internal/auth"
 	"futdarapaziada/api/internal/config"
+	"futdarapaziada/api/internal/mailer"
 	"futdarapaziada/api/internal/mercadopago"
 	"futdarapaziada/api/internal/store"
 )
 
 type Server struct {
-	cfg          config.Config
-	store        *store.Store
-	mercadoPago  *mercadopago.Client
-	loginLimiter *auth.LoginLimiter
+	cfg                  config.Config
+	store                *store.Store
+	mercadoPago          *mercadopago.Client
+	mailer               *mailer.Resend
+	loginLimiter         *auth.LoginLimiter
+	passwordResetLimiter *auth.LoginLimiter
 }
 
 func NewServer(cfg config.Config, st *store.Store) *Server {
 	return &Server{
-		cfg:          cfg,
-		store:        st,
-		mercadoPago:  mercadopago.New(cfg.MercadoPagoAccessToken),
-		loginLimiter: auth.NewLoginLimiter(10, 15*time.Minute),
+		cfg:                  cfg,
+		store:                st,
+		mercadoPago:          mercadopago.New(cfg.MercadoPagoAccessToken),
+		mailer:               mailer.NewResend(cfg.ResendAPIKey, cfg.EmailFrom),
+		loginLimiter:         auth.NewLoginLimiter(10, 15*time.Minute),
+		passwordResetLimiter: auth.NewLoginLimiter(3, 15*time.Minute),
 	}
 }
 
@@ -42,6 +47,8 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/invites/{token}", s.handleGetInvite)
 		r.Post("/invites/{token}/signup", s.handleSignup)
 		r.Post("/login", s.handleLogin)
+		r.Post("/password-reset/request", s.handlePasswordResetRequest)
+		r.Post("/password-reset/confirm", s.handlePasswordResetConfirm)
 		r.Post("/logout", s.handleLogout)
 		r.Post("/webhooks/mercadopago", s.handleMercadoPagoWebhook)
 

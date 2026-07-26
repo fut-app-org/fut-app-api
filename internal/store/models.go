@@ -13,6 +13,7 @@ type User struct {
 	InactiveReason string     `json:"inactive_reason"`
 	Delinquent     bool       `json:"delinquent"`
 	LastPaymentAt  *time.Time `json:"last_payment_at,omitempty"`
+	SessionVersion int        `json:"-"`
 	CreatedAt      time.Time  `json:"created_at"`
 }
 

@@ -14,14 +14,14 @@ var ErrNotFound = errors.New("registro não encontrado")
 // userColumns traz o usuário junto com o estado financeiro derivado das cobranças:
 // delinquent = tem cobrança vencida; last_payment_at = último pagamento confirmado.
 const userColumns = `
-	u.id, u.name, u.email, u.phone, u.avatar_color, u.role, u.status, u.inactive_reason, u.created_at,
+	u.id, u.name, u.email, u.phone, u.avatar_color, u.role, u.status, u.inactive_reason, u.created_at, u.session_version,
 	exists (select 1 from charges c where c.user_id = u.id and c.status = 'overdue') as delinquent,
 	(select max(c.paid_at) from charges c where c.user_id = u.id and c.status in ('paid','manual_paid')) as last_payment_at`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.AvatarColor, &u.Role, &u.Status,
-		&u.InactiveReason, &u.CreatedAt, &u.Delinquent, &u.LastPaymentAt)
+		&u.InactiveReason, &u.CreatedAt, &u.SessionVersion, &u.Delinquent, &u.LastPaymentAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, ErrNotFound
 	}
@@ -37,7 +37,7 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (User, string, er
 	var hash string
 	err := s.pool.QueryRow(ctx, `select `+userColumns+`, u.password_hash from users u where lower(u.email) = lower($1)`, email).
 		Scan(&u.ID, &u.Name, &u.Email, &u.Phone, &u.AvatarColor, &u.Role, &u.Status,
-			&u.InactiveReason, &u.CreatedAt, &u.Delinquent, &u.LastPaymentAt, &hash)
+			&u.InactiveReason, &u.CreatedAt, &u.SessionVersion, &u.Delinquent, &u.LastPaymentAt, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return u, "", ErrNotFound
 	}
@@ -169,7 +169,7 @@ func (s *Store) UpdateUser(ctx context.Context, id string, up UserUpdate) error 
 }
 
 func (s *Store) UpdatePassword(ctx context.Context, id, hash string) error {
-	_, err := s.pool.Exec(ctx, `update users set password_hash = $2, updated_at = now() where id = $1`, id, hash)
+	_, err := s.pool.Exec(ctx, `update users set password_hash = $2, session_version = session_version + 1, updated_at = now() where id = $1`, id, hash)
 	return err
 }
 
