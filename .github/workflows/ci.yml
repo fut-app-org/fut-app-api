@@ -23,6 +23,7 @@ jobs:
           go-version: '1.26.3'
           cache-dependency-path: go.sum
       - run: test -z "$(gofmt -l .)"
+      - run: bash -n scripts/*.sh
       - run: go vet ./...
       - run: go test ./...
       - uses: dominikh/staticcheck-action@v1
