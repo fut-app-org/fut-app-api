@@ -68,6 +68,15 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		log.Printf("criando Pix para cobrança %s: %v", charge.ID, err)
+		var providerError *mercadopago.APIError
+		if s.cfg.MercadoPagoTestMode && errors.As(err, &providerError) {
+			message := providerError.Message
+			if message == "" {
+				message = fmt.Sprintf("HTTP %d", providerError.StatusCode)
+			}
+			writeError(w, http.StatusBadGateway, "Mercado Pago sandbox recusou o Pix: "+message)
+			return
+		}
 		writeError(w, http.StatusBadGateway, "não foi possível gerar o Pix agora; tente novamente")
 		return
 	}

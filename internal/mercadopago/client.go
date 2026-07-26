@@ -24,6 +24,19 @@ type Client struct {
 	httpClient  *http.Client
 }
 
+// APIError identifies a non-success response from Mercado Pago.
+type APIError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *APIError) Error() string {
+	if e.Message == "" {
+		return fmt.Sprintf("mercado pago respondeu com HTTP %d", e.StatusCode)
+	}
+	return fmt.Sprintf("mercado pago respondeu com HTTP %d: %s", e.StatusCode, e.Message)
+}
+
 func New(accessToken string) *Client {
 	return newClient(accessToken, ordersURL, &http.Client{Timeout: 15 * time.Second})
 }
@@ -177,7 +190,20 @@ func (c *Client) doJSON(ctx context.Context, method, url, idempotencyKey string,
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return fmt.Errorf("mercado pago respondeu com HTTP %d", resp.StatusCode)
+		response, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if err != nil {
+			return fmt.Errorf("lendo erro do Mercado Pago: %w", err)
+		}
+		var providerError struct {
+			Message string `json:"message"`
+			Error   string `json:"error"`
+		}
+		_ = json.Unmarshal(response, &providerError)
+		message := strings.TrimSpace(providerError.Message)
+		if message == "" {
+			message = strings.TrimSpace(providerError.Error)
+		}
+		return &APIError{StatusCode: resp.StatusCode, Message: message}
 	}
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
 		return fmt.Errorf("lendo resposta do Mercado Pago: %w", err)
