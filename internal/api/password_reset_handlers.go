@@ -33,7 +33,7 @@ func (s *Server) handlePasswordResetRequest(w http.ResponseWriter, r *http.Reque
 
 	token, err := newPasswordResetToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "erro ao preparar a recuperacao de senha")
+		writeError(w, http.StatusInternalServerError, "erro ao preparar a recupera\u00e7\u00e3o de senha")
 		return
 	}
 	user, err := s.store.CreatePasswordReset(r.Context(), email, hashPasswordResetToken(token), time.Now().Add(passwordResetDuration))
@@ -71,7 +71,7 @@ func (s *Server) handlePasswordResetConfirm(w http.ResponseWriter, r *http.Reque
 	}
 	err = s.store.ResetPassword(r.Context(), hashPasswordResetToken(body.Token), hash)
 	if errors.Is(err, store.ErrNotFound) {
-		writeError(w, http.StatusBadRequest, "link invÃ¡lido ou expirado")
+		writeError(w, http.StatusBadRequest, "link inv\u00e1lido ou expirado")
 		return
 	}
 	if err != nil {
