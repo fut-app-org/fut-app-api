@@ -32,6 +32,8 @@ services:
       SEED_ADMIN_NAME: ${SEED_ADMIN_NAME:-Administrador}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@futdarapaziada.local}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
+      MERCADO_PAGO_ACCESS_TOKEN: ${MERCADO_PAGO_ACCESS_TOKEN:-}
+      MERCADO_PAGO_WEBHOOK_SECRET: ${MERCADO_PAGO_WEBHOOK_SECRET:-}
       TZ: America/Sao_Paulo
     volumes:
       - media-data:/data/media
