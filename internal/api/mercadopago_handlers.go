@@ -13,6 +13,8 @@ import (
 	"futdarapaziada/api/internal/store"
 )
 
+const mercadoPagoSandboxPayerEmail = "test_user_br@testuser.com"
+
 // handleCreatePixCharge returns an existing Pix or creates one for the logged
 // in user. Creating on first access avoids creating external orders that no
 // player will ever see, while the idempotency key prevents duplicates.
@@ -47,11 +49,7 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 	payerEmail := user.Email
 	payerFirstName := user.Name
 	if s.cfg.MercadoPagoTestMode {
-		if s.cfg.MercadoPagoTestBuyerEmail == "" {
-			writeError(w, http.StatusServiceUnavailable, "o buyer de teste do Mercado Pago ainda nÃ£o estÃ¡ configurado")
-			return
-		}
-		payerEmail = s.cfg.MercadoPagoTestBuyerEmail
+		payerEmail = mercadoPagoSandboxPayerEmail
 		payerFirstName = "APRO"
 	}
 	expiration, err := pixExpiration(time.Now(), charge.DueDate)

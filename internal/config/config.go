@@ -16,10 +16,9 @@ type Config struct {
 	Env         string // "development" ou "production"
 	MediaDir    string
 
-	MercadoPagoAccessToken    string
-	MercadoPagoWebhookSecret  string
-	MercadoPagoTestMode       bool
-	MercadoPagoTestBuyerEmail string
+	MercadoPagoAccessToken   string
+	MercadoPagoWebhookSecret string
+	MercadoPagoTestMode      bool
 
 	// Usados só na primeira execução, quando o banco não tem nenhum usuário.
 	SeedAdminName     string
@@ -29,17 +28,16 @@ type Config struct {
 
 func Load() Config {
 	cfg := Config{
-		DatabaseURL:               getenv("DATABASE_URL", "postgres://futapp:futapp@localhost:5432/futapp?sslmode=disable"),
-		Port:                      getenv("PORT", "8080"),
-		Env:                       getenv("ENV", "development"),
-		MediaDir:                  getenv("MEDIA_DIR", "./data/media"),
-		MercadoPagoAccessToken:    os.Getenv("MERCADO_PAGO_ACCESS_TOKEN"),
-		MercadoPagoWebhookSecret:  os.Getenv("MERCADO_PAGO_WEBHOOK_SECRET"),
-		MercadoPagoTestMode:       getenvBool("MERCADO_PAGO_TEST_MODE"),
-		MercadoPagoTestBuyerEmail: os.Getenv("MERCADO_PAGO_TEST_BUYER_EMAIL"),
-		SeedAdminName:             getenv("SEED_ADMIN_NAME", "Administrador"),
-		SeedAdminEmail:            getenv("SEED_ADMIN_EMAIL", "admin@futdarapaziada.local"),
-		SeedAdminPassword:         os.Getenv("SEED_ADMIN_PASSWORD"),
+		DatabaseURL:              getenv("DATABASE_URL", "postgres://futapp:futapp@localhost:5432/futapp?sslmode=disable"),
+		Port:                     getenv("PORT", "8080"),
+		Env:                      getenv("ENV", "development"),
+		MediaDir:                 getenv("MEDIA_DIR", "./data/media"),
+		MercadoPagoAccessToken:   os.Getenv("MERCADO_PAGO_ACCESS_TOKEN"),
+		MercadoPagoWebhookSecret: os.Getenv("MERCADO_PAGO_WEBHOOK_SECRET"),
+		MercadoPagoTestMode:      getenvBool("MERCADO_PAGO_TEST_MODE"),
+		SeedAdminName:            getenv("SEED_ADMIN_NAME", "Administrador"),
+		SeedAdminEmail:           getenv("SEED_ADMIN_EMAIL", "admin@futdarapaziada.local"),
+		SeedAdminPassword:        os.Getenv("SEED_ADMIN_PASSWORD"),
 	}
 
 	secret := os.Getenv("JWT_SECRET")
