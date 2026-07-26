@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
@@ -26,8 +27,12 @@ func avatarColorFor(name string) string {
 	return avatarPalette[h.Sum32()%uint32(len(avatarPalette))]
 }
 
-func (s *Server) setSessionCookie(w http.ResponseWriter, userID string) error {
-	token, expires, err := auth.NewSessionToken(s.cfg.JWTSecret, userID)
+func (s *Server) setSessionCookie(ctx context.Context, w http.ResponseWriter, userID string) error {
+	user, err := s.store.UserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	token, expires, err := auth.NewSessionToken(s.cfg.JWTSecret, userID, user.SessionVersion)
 	if err != nil {
 		return err
 	}
@@ -75,7 +80,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.loginLimiter.Reset(body.Email)
-	if err := s.setSessionCookie(w, user.ID); err != nil {
+	if err := s.setSessionCookie(r.Context(), w, user.ID); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -149,6 +154,12 @@ func (s *Server) handleUpdateMe(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeStoreError(w, err)
 		return
+	}
+	if body.Password != nil {
+		if err := s.setSessionCookie(r.Context(), w, updated.ID); err != nil {
+			writeStoreError(w, err)
+			return
+		}
 	}
 	writeJSON(w, http.StatusOK, updated)
 }
@@ -235,7 +246,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) {
 	s.store.LogActivity(r.Context(), &user.ID, "signup",
 		fmt.Sprintf("%s entrou no grupo pelo convite de %s", user.Name, invite.CreatorName))
 
-	if err := s.setSessionCookie(w, user.ID); err != nil {
+	if err := s.setSessionCookie(r.Context(), w, user.ID); err != nil {
 		writeStoreError(w, err)
 		return
 	}

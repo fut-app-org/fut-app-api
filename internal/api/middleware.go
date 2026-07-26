@@ -26,7 +26,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "sessão ausente")
 			return
 		}
-		userID, err := auth.ParseSessionToken(s.cfg.JWTSecret, cookie.Value)
+		userID, sessionVersion, err := auth.ParseSessionToken(s.cfg.JWTSecret, cookie.Value)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "sessão inválida ou expirada")
 			return
@@ -38,6 +38,10 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		}
 		if user.Status == "archived" {
 			writeError(w, http.StatusForbidden, "conta arquivada")
+			return
+		}
+		if user.SessionVersion != sessionVersion {
+			writeError(w, http.StatusUnauthorized, "sessÃ£o expirada")
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userKey, user)))

@@ -19,6 +19,9 @@ type Config struct {
 	MercadoPagoAccessToken   string
 	MercadoPagoWebhookSecret string
 	MercadoPagoTestMode      bool
+	ResendAPIKey             string
+	EmailFrom                string
+	AppURL                   string
 
 	// Usados só na primeira execução, quando o banco não tem nenhum usuário.
 	SeedAdminName     string
@@ -35,6 +38,9 @@ func Load() Config {
 		MercadoPagoAccessToken:   os.Getenv("MERCADO_PAGO_ACCESS_TOKEN"),
 		MercadoPagoWebhookSecret: os.Getenv("MERCADO_PAGO_WEBHOOK_SECRET"),
 		MercadoPagoTestMode:      getenvBool("MERCADO_PAGO_TEST_MODE"),
+		ResendAPIKey:             os.Getenv("RESEND_API_KEY"),
+		EmailFrom:                os.Getenv("EMAIL_FROM"),
+		AppURL:                   getenv("APP_URL", "http://localhost:5173"),
 		SeedAdminName:            getenv("SEED_ADMIN_NAME", "Administrador"),
 		SeedAdminEmail:           getenv("SEED_ADMIN_EMAIL", "admin@futdarapaziada.local"),
 		SeedAdminPassword:        os.Getenv("SEED_ADMIN_PASSWORD"),
