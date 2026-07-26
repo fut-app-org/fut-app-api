@@ -20,6 +20,10 @@ go vet ./...
 staticcheck ./...
 ```
 
+## OperaÃ§Ã£o
+
+Consulte [OPERATIONS.md](OPERATIONS.md) para backup, restauraÃ§Ã£o e monitoramento.
+
 ## Dados de demonstração
 
 Para revisar a interface com os usuários ativos já existentes, use o script operacional abaixo no servidor. Ele não cria usuários e não altera perfis, senhas ou configurações. As partidas, votações, cobranças e atividades recebem um marcador exclusivo e podem ser removidas integralmente.

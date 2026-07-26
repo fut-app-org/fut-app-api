@@ -14,13 +14,23 @@ import (
 const resendEndpoint = "https://api.resend.com/emails"
 
 type Resend struct {
-	apiKey string
-	from   string
-	client *http.Client
+	apiKey   string
+	from     string
+	client   *http.Client
+	endpoint string
 }
 
 func NewResend(apiKey, from string) *Resend {
-	return &Resend{apiKey: strings.TrimSpace(apiKey), from: strings.TrimSpace(from), client: &http.Client{Timeout: 15 * time.Second}}
+	return newResend(apiKey, from, &http.Client{Timeout: 15 * time.Second}, resendEndpoint)
+}
+
+func newResend(apiKey, from string, client *http.Client, endpoint string) *Resend {
+	return &Resend{
+		apiKey:   strings.TrimSpace(apiKey),
+		from:     strings.TrimSpace(from),
+		client:   client,
+		endpoint: endpoint,
+	}
 }
 
 func (r *Resend) Enabled() bool { return r.apiKey != "" && r.from != "" }
@@ -37,7 +47,7 @@ func (r *Resend) SendPasswordReset(ctx context.Context, to, resetURL string) err
 	if err != nil {
 		return fmt.Errorf("codificando e-mail: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, resendEndpoint, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("criando requisiÃ§Ã£o Resend: %w", err)
 	}

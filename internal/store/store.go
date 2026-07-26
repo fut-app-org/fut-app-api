@@ -30,6 +30,11 @@ func New(ctx context.Context, databaseURL string) (*Store, error) {
 
 func (s *Store) Close() { s.pool.Close() }
 
+// Ping confirms that the database connection pool can reach PostgreSQL.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}
+
 // Migrate aplica, em ordem, os arquivos de migrations/ que ainda não foram executados.
 func (s *Store) Migrate(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `create table if not exists schema_migrations (
