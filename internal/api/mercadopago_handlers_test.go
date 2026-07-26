@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -8,6 +9,19 @@ import (
 func TestAmountInReais(t *testing.T) {
 	if got, want := amountInReais(8050), "80.50"; got != want {
 		t.Errorf("amountInReais() = %q, want %q", got, want)
+	}
+}
+
+func TestMercadoPagoIdempotencyKey(t *testing.T) {
+	key, err := mercadoPagoIdempotencyKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(key) != 36 || strings.Count(key, "-") != 4 {
+		t.Errorf("mercadoPagoIdempotencyKey() = %q, want UUID", key)
+	}
+	if key[14] != '4' {
+		t.Errorf("mercadoPagoIdempotencyKey() = %q, want UUID v4", key)
 	}
 }
 

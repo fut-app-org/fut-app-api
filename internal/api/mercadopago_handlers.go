@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log"
@@ -57,6 +58,12 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	idempotencyKey, err := mercadoPagoIdempotencyKey()
+	if err != nil {
+		log.Printf("gerando chave de idempotência Mercado Pago: %v", err)
+		writeError(w, http.StatusInternalServerError, "não foi possível preparar o Pix")
+		return
+	}
 
 	order, err := s.mercadoPago.CreatePixOrder(r.Context(), mercadopago.CreatePixOrderInput{
 		Amount:             amountInReais(charge.AmountCents),
@@ -64,7 +71,7 @@ func (s *Server) handleCreatePixCharge(w http.ResponseWriter, r *http.Request) {
 		PayerEmail:         payerEmail,
 		PayerFirstName:     payerFirstName,
 		ExpirationDuration: expiration,
-		IdempotencyKey:     "fut-app-charge-" + charge.ID,
+		IdempotencyKey:     idempotencyKey,
 	})
 	if err != nil {
 		log.Printf("criando Pix para cobrança %s: %v", charge.ID, err)
@@ -186,6 +193,16 @@ func (s *Server) handleMercadoPagoWebhook(w http.ResponseWriter, r *http.Request
 
 func amountInReais(cents int64) string {
 	return fmt.Sprintf("%d.%02d", cents/100, cents%100)
+}
+
+func mercadoPagoIdempotencyKey() (string, error) {
+	value := make([]byte, 16)
+	if _, err := rand.Read(value); err != nil {
+		return "", err
+	}
+	value[6] = value[6]&0x0f | 0x40
+	value[8] = value[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", value[0:4], value[4:6], value[6:8], value[8:10], value[10:]), nil
 }
 
 func pixExpiration(now time.Time, dueDate string) (string, error) {
