@@ -106,6 +106,7 @@ type Charge struct {
 	PixPayload      string     `json:"pix_payload"`
 	PixTicketURL    string     `json:"pix_ticket_url"`
 	PixQRCodeBase64 string     `json:"pix_qr_code_base64"`
+	ProviderOrderID string     `json:"-"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
