@@ -188,13 +188,17 @@ func pixExpiration(now time.Time, dueDate string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("carregando fuso horário brasileiro: %w", err)
 	}
+
 	deadline := time.Date(due.Year(), due.Month(), due.Day(), 23, 59, 0, 0, location)
 	duration := deadline.Sub(now.In(location))
+	// A cobrança pode estar vencida, mas ainda deve poder ser quitada. Nesse caso,
+	// o Pix recebe um novo prazo de 24 horas, dentro do intervalo aceito pelo
+	// Mercado Pago. Para cobranças muito futuras, limitamos o prazo a 30 dias.
 	if duration < 30*time.Minute {
-		return "", errors.New("o prazo desta cobrança já terminou")
+		duration = 24 * time.Hour
 	}
 	if duration > 30*24*time.Hour {
-		return "", errors.New("o vencimento desta cobrança excede o limite do Pix")
+		duration = 30 * 24 * time.Hour
 	}
 
 	minutes := int(duration.Round(time.Minute).Minutes())

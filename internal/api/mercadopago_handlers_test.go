@@ -22,9 +22,13 @@ func TestPixExpiration(t *testing.T) {
 	}
 }
 
-func TestPixExpirationRejectsExpiredCharge(t *testing.T) {
+func TestPixExpirationRenewsExpiredCharge(t *testing.T) {
 	now := time.Date(2026, time.July, 25, 10, 0, 0, 0, time.FixedZone("BRT", -3*60*60))
-	if _, err := pixExpiration(now, "2026-07-24"); err == nil {
-		t.Error("pixExpiration() error = nil, want error")
+	got, err := pixExpiration(now, "2026-07-24")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "PT24H0M" {
+		t.Errorf("pixExpiration() = %q, want PT24H0M", got)
 	}
 }
