@@ -29,8 +29,10 @@ func (r *Resend) SendPasswordReset(ctx context.Context, to, resetURL string) err
 	body, err := json.Marshal(map[string]string{
 		"from":    r.from,
 		"to":      to,
-		"subject": "Redefina sua senha — Fut da Rapaziada",
-		"html":    `<p>Recebemos uma solicitaÃ§Ã£o para redefinir sua senha.</p><p><a href="` + resetURL + `">Redefinir senha</a></p><p>Este link expira em 30 minutos. Se vocÃª nÃ£o solicitou, ignore este e-mail.</p>`,
+		"subject": "Redefina sua senha \u2014 Fut da Rapaziada",
+		"html": `<p>Recebemos uma solicita&ccedil;&atilde;o para redefinir sua senha.</p>` +
+			`<p><a href="` + resetURL + `">Redefinir senha</a></p>` +
+			`<p>Este link expira em 30 minutos. Se voc&ecirc; n&atilde;o solicitou, ignore este e-mail.</p>`,
 	})
 	if err != nil {
 		return fmt.Errorf("codificando e-mail: %w", err)
