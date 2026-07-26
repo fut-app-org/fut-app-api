@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/mercadopago/sdk-go/pkg/webhook"
@@ -120,7 +121,7 @@ func (s *Server) handleMercadoPagoWebhook(w http.ResponseWriter, r *http.Request
 	if err := webhook.ValidateSignature(
 		r.Header.Get("x-signature"),
 		r.Header.Get("x-request-id"),
-		orderID,
+		mercadoPagoWebhookDataID(orderID),
 		s.cfg.MercadoPagoWebhookSecret,
 	); err != nil {
 		log.Printf("webhook Mercado Pago rejeitado: %v", err)
@@ -193,6 +194,13 @@ func (s *Server) handleMercadoPagoWebhook(w http.ResponseWriter, r *http.Request
 
 func amountInReais(cents int64) string {
 	return fmt.Sprintf("%d.%02d", cents/100, cents%100)
+}
+
+// mercadoPagoWebhookDataID normalizes an alphanumeric order ID for the
+// Mercado Pago signature manifest. The provider requires this field in lower
+// case, while Orders API IDs are returned in upper case.
+func mercadoPagoWebhookDataID(orderID string) string {
+	return strings.ToLower(orderID)
 }
 
 func mercadoPagoIdempotencyKey() (string, error) {

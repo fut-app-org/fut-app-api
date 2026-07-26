@@ -1,9 +1,14 @@
 package api
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/mercadopago/sdk-go/pkg/webhook"
 )
 
 func TestAmountInReais(t *testing.T) {
@@ -22,6 +27,25 @@ func TestMercadoPagoIdempotencyKey(t *testing.T) {
 	}
 	if key[14] != '4' {
 		t.Errorf("mercadoPagoIdempotencyKey() = %q, want UUID v4", key)
+	}
+}
+
+func TestMercadoPagoWebhookDataIDVerifiesUppercaseOrderID(t *testing.T) {
+	const (
+		secret    = "test-secret"
+		orderID   = "ORDTST01KYFVH4FFSFKN60VKZEHP62E1"
+		requestID = "request-123"
+		timestamp = "1704908010"
+	)
+
+	manifest := "id:ordtst01kyfvh4ffsfkn60vkzehp62e1;request-id:" + requestID + ";ts:" + timestamp + ";"
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(manifest))
+	signature := "ts=" + timestamp + ",v1=" + hex.EncodeToString(mac.Sum(nil))
+
+	err := webhook.ValidateSignature(signature, requestID, mercadoPagoWebhookDataID(orderID), secret)
+	if err != nil {
+		t.Fatalf("ValidateSignature() = %v, want nil", err)
 	}
 }
 
