@@ -3,6 +3,7 @@ package mercadopago
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -64,6 +65,30 @@ func TestCreatePixOrder(t *testing.T) {
 	payment, ok := order.PixPayment()
 	if !ok || payment.PaymentMethod.QRCode != "pix-code" {
 		t.Errorf("PixPayment() = %#v, %t", payment, ok)
+	}
+}
+
+func TestCreatePixOrderReturnsProviderError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"message":"payer email invalid"}`))
+	}))
+	defer server.Close()
+
+	client := newClient("test-token", server.URL+"/v1/orders", server.Client())
+	_, err := client.CreatePixOrder(context.Background(), CreatePixOrderInput{
+		Amount:             "42.50",
+		ChargeID:           "charge-123",
+		PayerEmail:         "buyer@testuser.com",
+		ExpirationDuration: "PT48H0M",
+		IdempotencyKey:     "charge-123",
+	})
+	var providerError *APIError
+	if !errors.As(err, &providerError) {
+		t.Fatalf("error = %v, want APIError", err)
+	}
+	if providerError.StatusCode != http.StatusBadRequest || providerError.Message != "payer email invalid" {
+		t.Errorf("APIError = %#v", providerError)
 	}
 }
 
