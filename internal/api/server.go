@@ -10,12 +10,14 @@ import (
 
 	"futdarapaziada/api/internal/auth"
 	"futdarapaziada/api/internal/config"
+	"futdarapaziada/api/internal/mercadopago"
 	"futdarapaziada/api/internal/store"
 )
 
 type Server struct {
 	cfg          config.Config
 	store        *store.Store
+	mercadoPago  *mercadopago.Client
 	loginLimiter *auth.LoginLimiter
 }
 
@@ -23,6 +25,7 @@ func NewServer(cfg config.Config, st *store.Store) *Server {
 	return &Server{
 		cfg:          cfg,
 		store:        st,
+		mercadoPago:  mercadopago.New(cfg.MercadoPagoAccessToken),
 		loginLimiter: auth.NewLoginLimiter(10, 15*time.Minute),
 	}
 }
@@ -40,6 +43,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/invites/{token}/signup", s.handleSignup)
 		r.Post("/login", s.handleLogin)
 		r.Post("/logout", s.handleLogout)
+		r.Post("/webhooks/mercadopago", s.handleMercadoPagoWebhook)
 
 		// Autenticado — acessível também a usuários inativos (consultar bloqueio e pagar)
 		r.Group(func(r chi.Router) {
@@ -47,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/me", s.handleMe)
 			r.Patch("/me", s.handleUpdateMe)
 			r.Get("/charges/me", s.handleMyCharges)
+			r.Post("/charges/{id}/pix", s.handleCreatePixCharge)
 			r.Get("/media/files/{matchId}/{filename}", s.handleServeMedia)
 		})
 

@@ -11,7 +11,8 @@ import (
 const chargeColumns = `
 	c.id, c.batch_id, c.user_id, u.name, u.role, u.avatar_color,
 	to_char(c.reference_month, 'YYYY-MM'), c.amount_cents, c.status, c.due_date::text,
-	c.paid_at, c.paid_method, c.registered_by, coalesce(r.name, ''), c.pix_payload, c.created_at`
+	c.paid_at, c.paid_method, c.registered_by, coalesce(r.name, ''), c.pix_payload,
+	c.pix_ticket_url, c.pix_qr_code_base64, c.created_at`
 
 const chargeJoins = `
 	from charges c
@@ -22,11 +23,74 @@ func scanCharge(row pgx.Row) (Charge, error) {
 	var c Charge
 	err := row.Scan(&c.ID, &c.BatchID, &c.UserID, &c.UserName, &c.UserRole, &c.AvatarColor,
 		&c.ReferenceMonth, &c.AmountCents, &c.Status, &c.DueDate,
-		&c.PaidAt, &c.PaidMethod, &c.RegisteredBy, &c.RegisteredName, &c.PixPayload, &c.CreatedAt)
+		&c.PaidAt, &c.PaidMethod, &c.RegisteredBy, &c.RegisteredName, &c.PixPayload,
+		&c.PixTicketURL, &c.PixQRCodeBase64, &c.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return c, ErrNotFound
 	}
 	return c, err
+}
+
+// SaveMercadoPagoOrder guarda o Pix retornado pelo gateway. A mesma cobrança
+// pode ser solicitada mais de uma vez com a mesma idempotency key sem criar
+// uma segunda order no Mercado Pago.
+func (s *Store) SaveMercadoPagoOrder(ctx context.Context, chargeID, orderID, paymentID, status, statusDetail, pixPayload, ticketURL, qrCodeBase64 string) error {
+	tag, err := s.pool.Exec(ctx, `
+		update charges
+		set payment_provider = 'mercado_pago', provider_order_id = $2, provider_payment_id = $3,
+			provider_status = $4, provider_status_detail = $5, pix_payload = $6,
+			pix_ticket_url = $7, pix_qr_code_base64 = $8
+		where id = $1 and (provider_order_id = '' or provider_order_id = $2)`,
+		chargeID, orderID, paymentID, status, statusDetail, pixPayload, ticketURL, qrCodeBase64)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UpdateMercadoPagoStatus registra o último estado informado pelo gateway.
+func (s *Store) UpdateMercadoPagoStatus(ctx context.Context, chargeID, orderID, paymentID, status, statusDetail string) error {
+	tag, err := s.pool.Exec(ctx, `
+		update charges
+		set provider_payment_id = $3, provider_status = $4, provider_status_detail = $5
+		where id = $1 and payment_provider = 'mercado_pago' and provider_order_id = $2`,
+		chargeID, orderID, paymentID, status, statusDetail)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkMercadoPagoPaid confirma um Pix aprovado pelo gateway. Retornos de
+// webhook podem ser repetidos, portanto a função informa se esta chamada fez
+// a baixa pela primeira vez.
+func (s *Store) MarkMercadoPagoPaid(ctx context.Context, chargeID, orderID, paymentID string) (Charge, bool, bool, error) {
+	tag, err := s.pool.Exec(ctx, `
+		update charges
+		set status = 'paid', paid_at = now(), paid_method = 'pix', provider_payment_id = $3,
+			provider_status = 'processed', provider_status_detail = 'accredited'
+		where id = $1 and payment_provider = 'mercado_pago' and provider_order_id = $2
+		  and status in ('pending', 'overdue')`, chargeID, orderID, paymentID)
+	if err != nil {
+		return Charge{}, false, false, err
+	}
+
+	charge, err := s.ChargeByID(ctx, chargeID)
+	if err != nil {
+		return Charge{}, false, false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return charge, false, false, nil
+	}
+
+	reactivated, err := s.reactivateIfClear(ctx, charge.UserID, "")
+	return charge, true, reactivated, err
 }
 
 func (s *Store) ChargeByID(ctx context.Context, id string) (Charge, error) {

@@ -89,22 +89,24 @@ type ChargeBatch struct {
 }
 
 type Charge struct {
-	ID             string     `json:"id"`
-	BatchID        string     `json:"batch_id"`
-	UserID         string     `json:"user_id"`
-	UserName       string     `json:"user_name"`
-	UserRole       string     `json:"user_role"`
-	AvatarColor    string     `json:"avatar_color"`
-	ReferenceMonth string     `json:"reference_month"` // YYYY-MM
-	AmountCents    int64      `json:"amount_cents"`
-	Status         string     `json:"status"`
-	DueDate        string     `json:"due_date"` // YYYY-MM-DD
-	PaidAt         *time.Time `json:"paid_at,omitempty"`
-	PaidMethod     string     `json:"paid_method"`
-	RegisteredBy   *string    `json:"registered_by,omitempty"`
-	RegisteredName string     `json:"registered_by_name,omitempty"`
-	PixPayload     string     `json:"pix_payload"`
-	CreatedAt      time.Time  `json:"created_at"`
+	ID              string     `json:"id"`
+	BatchID         string     `json:"batch_id"`
+	UserID          string     `json:"user_id"`
+	UserName        string     `json:"user_name"`
+	UserRole        string     `json:"user_role"`
+	AvatarColor     string     `json:"avatar_color"`
+	ReferenceMonth  string     `json:"reference_month"` // YYYY-MM
+	AmountCents     int64      `json:"amount_cents"`
+	Status          string     `json:"status"`
+	DueDate         string     `json:"due_date"` // YYYY-MM-DD
+	PaidAt          *time.Time `json:"paid_at,omitempty"`
+	PaidMethod      string     `json:"paid_method"`
+	RegisteredBy    *string    `json:"registered_by,omitempty"`
+	RegisteredName  string     `json:"registered_by_name,omitempty"`
+	PixPayload      string     `json:"pix_payload"`
+	PixTicketURL    string     `json:"pix_ticket_url"`
+	PixQRCodeBase64 string     `json:"pix_qr_code_base64"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 type VoteResult struct {
