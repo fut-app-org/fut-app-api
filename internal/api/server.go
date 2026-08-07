@@ -12,6 +12,7 @@ import (
 	"futdarapaziada/api/internal/config"
 	"futdarapaziada/api/internal/mailer"
 	"futdarapaziada/api/internal/mercadopago"
+	"futdarapaziada/api/internal/notify"
 	"futdarapaziada/api/internal/store"
 )
 
@@ -20,16 +21,18 @@ type Server struct {
 	store                *store.Store
 	mercadoPago          *mercadopago.Client
 	mailer               *mailer.Resend
+	sender               notify.Sender
 	loginLimiter         *auth.LoginLimiter
 	passwordResetLimiter *auth.LoginLimiter
 }
 
-func NewServer(cfg config.Config, st *store.Store) *Server {
+func NewServer(cfg config.Config, st *store.Store, sender notify.Sender) *Server {
 	return &Server{
 		cfg:                  cfg,
 		store:                st,
 		mercadoPago:          mercadopago.New(cfg.MercadoPagoAccessToken),
 		mailer:               mailer.NewResend(cfg.ResendAPIKey, cfg.EmailFrom),
+		sender:               sender,
 		loginLimiter:         auth.NewLoginLimiter(10, 15*time.Minute),
 		passwordResetLimiter: auth.NewLoginLimiter(3, 15*time.Minute),
 	}
@@ -102,6 +105,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)
 			r.Post("/admin/charges/{id}/whatsapp-reminder", s.handleWhatsAppReminder)
+			r.Post("/admin/charges/{id}/whatsapp-send", s.handleWhatsAppSend)
 			r.Post("/admin/charges/{id}/mark-paid", s.handleMarkPaid)
 			r.Post("/admin/charges/{id}/cancel", s.handleCancelCharge)
 			r.Post("/admin/charges/{id}/exempt", s.handleExemptCharge)

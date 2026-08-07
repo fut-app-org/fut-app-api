@@ -267,18 +267,37 @@ func (s *Store) SetChargeStatus(ctx context.Context, chargeID, newStatus string)
 	return nil
 }
 
-// MarkOverdueCharges marca como vencidas as cobranças pendentes após o vencimento
-// e retorna os usuários afetados.
-func (s *Store) MarkOverdueCharges(ctx context.Context) ([]string, error) {
+// OverdueCharge é uma cobrança que acabou de transicionar para vencida,
+// com o telefone do usuário para o lembrete de WhatsApp.
+type OverdueCharge struct {
+	Charge
+	UserPhone string
+}
+
+// MarkOverdueCharges marca como vencidas as cobranças pendentes após o
+// vencimento e retorna as cobranças que transicionaram nesta execução.
+func (s *Store) MarkOverdueCharges(ctx context.Context) ([]OverdueCharge, error) {
 	rows, err := s.pool.Query(ctx, `
-		update charges set status = 'overdue'
-		where status = 'pending' and due_date < current_date
-		returning user_id`)
+		update charges c set status = 'overdue'
+		from users u
+		where c.user_id = u.id and c.status = 'pending' and c.due_date < current_date
+		returning c.id, c.user_id, u.name, u.phone,
+			to_char(c.reference_month, 'YYYY-MM'), c.amount_cents, c.due_date::text`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return collectIDs(rows)
+
+	var overdue []OverdueCharge
+	for rows.Next() {
+		var o OverdueCharge
+		if err := rows.Scan(&o.ID, &o.UserID, &o.UserName, &o.UserPhone,
+			&o.ReferenceMonth, &o.AmountCents, &o.DueDate); err != nil {
+			return nil, err
+		}
+		overdue = append(overdue, o)
+	}
+	return overdue, rows.Err()
 }
 
 // UsersToInactivate lista usuários ativos com cobrança vencida há mais de graceDays.
