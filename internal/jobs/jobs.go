@@ -5,6 +5,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"github.com/robfig/cron/v3"
 
@@ -77,15 +79,17 @@ func (r *Runner) closeExpiredVoting() {
 	}
 }
 
-// markOverdueAndInactivate marca cobranças vencidas e inativa quem estourou o
-// prazo de tolerância (overdue_inactivate_days; 0 = inativa no dia seguinte ao
-// vencimento).
+// markOverdueAndInactivate marca cobranças vencidas, agenda o lembrete de
+// WhatsApp para cada uma e inativa quem estourou o prazo de tolerância
+// (overdue_inactivate_days; 0 = inativa no dia seguinte ao vencimento).
 func (r *Runner) markOverdueAndInactivate() {
 	ctx := context.Background()
-	if _, err := r.store.MarkOverdueCharges(ctx); err != nil {
+	overdue, err := r.store.MarkOverdueCharges(ctx)
+	if err != nil {
 		log.Printf("job marcar vencidas: %v", err)
 		return
 	}
+	r.scheduleOverdueReminders(ctx, overdue)
 
 	graceDays := r.store.SettingInt(ctx, "overdue_inactivate_days", 0)
 	users, err := r.store.UsersToInactivate(ctx, graceDays)
@@ -102,6 +106,50 @@ func (r *Runner) markOverdueAndInactivate() {
 		r.store.LogActivity(ctx, nil, "user_inactivated",
 			fmt.Sprintf("%s foi inativado por inadimplência", u.Name))
 	}
+}
+
+const defaultOverdueTemplate = "Olá, {{nome}}. A mensalidade de {{mes_referencia}}, no valor de {{valor}}, venceu em {{data_vencimento}} e ainda está em aberto. Regularize para evitar a inativação."
+
+// scheduleOverdueReminders agenda o lembrete de vencido de cada cobrança que
+// acabou de transicionar — a fila (sendDueNotifications) faz o envio.
+func (r *Runner) scheduleOverdueReminders(ctx context.Context, overdue []store.OverdueCharge) {
+	if len(overdue) == 0 {
+		return
+	}
+	template := r.store.SettingString(ctx, "overdue_template", defaultOverdueTemplate)
+	for _, o := range overdue {
+		phone, err := notify.NormalizeNumber(o.UserPhone)
+		if err != nil {
+			log.Printf("lembrete de vencido: %s sem WhatsApp válido (%q): %v", o.UserName, o.UserPhone, err)
+			continue
+		}
+		dueDate, err := time.Parse("2006-01-02", o.DueDate)
+		if err != nil {
+			log.Printf("lembrete de vencido: vencimento inválido na cobrança %s: %v", o.ID, err)
+			continue
+		}
+		message := renderTemplate(template, map[string]string{
+			"{{nome}}":            o.UserName,
+			"{{mes_referencia}}":  o.ReferenceMonth,
+			"{{valor}}":           formatCentsBR(o.AmountCents),
+			"{{data_vencimento}}": dueDate.Format("02/01/2006"),
+		})
+		if _, err := r.store.ScheduleNotification(ctx, o.UserID, &o.ID, phone, message, time.Now()); err != nil {
+			log.Printf("agendando lembrete de vencido para %s: %v", o.UserName, err)
+		}
+	}
+}
+
+func renderTemplate(template string, replacements map[string]string) string {
+	for placeholder, value := range replacements {
+		template = strings.ReplaceAll(template, placeholder, value)
+	}
+	return template
+}
+
+// formatCentsBR formata centavos como "R$ 80,00".
+func formatCentsBR(cents int64) string {
+	return fmt.Sprintf("R$ %d,%02d", cents/100, cents%100)
 }
 
 func (r *Runner) sendDueNotifications() {

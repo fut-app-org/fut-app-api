@@ -38,11 +38,19 @@ func main() {
 		log.Fatalf("criando diretório de mídia: %v", err)
 	}
 
-	runner := jobs.New(st, notify.LogSender{})
+	sender := notify.Sender(notify.LogSender{})
+	if cfg.EvolutionAPIURL != "" && cfg.EvolutionAPIKey != "" {
+		sender = notify.NewEvolutionSender(cfg.EvolutionAPIURL, cfg.EvolutionAPIKey)
+		log.Printf("WhatsApp via Evolution Go em %s", cfg.EvolutionAPIURL)
+	} else {
+		log.Println("EVOLUTION_API_URL/EVOLUTION_API_KEY não definidos; WhatsApp apenas em log")
+	}
+
+	runner := jobs.New(st, sender)
 	runner.Start()
 	defer runner.Stop()
 
-	server := api.NewServer(cfg, st)
+	server := api.NewServer(cfg, st, sender)
 	log.Printf("API ouvindo em :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, server.Handler()); err != nil {
 		log.Fatal(err)

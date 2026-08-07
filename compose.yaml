@@ -38,12 +38,16 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       EMAIL_FROM: ${EMAIL_FROM:-}
       APP_URL: ${APP_URL:-https://fut.devarthur.com.br}
+      # WhatsApp via Evolution Go. Sem essas vars o envio só registra em log.
+      EVOLUTION_API_URL: ${EVOLUTION_API_URL:-}
+      EVOLUTION_API_KEY: ${EVOLUTION_API_KEY:-}
       TZ: America/Sao_Paulo
     volumes:
       - media-data:/data/media
     networks:
       - default
       - fut-app
+      - evolution-go
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:8080/api/healthz']
       interval: 15s
@@ -59,3 +63,8 @@ networks:
   fut-app:
     external: true
     name: fut-app
+  # Instancia Evolution Go (WhatsApp) na VPS. Declarada aqui para que a conexao
+  # sobreviva a recriacoes do compose (docker network connect isolado nao persiste).
+  evolution-go:
+    external: true
+    name: evolution-go-lssf_default

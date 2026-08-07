@@ -23,6 +23,10 @@ type Config struct {
 	EmailFrom                string
 	AppURL                   string
 
+	// Evolution Go (WhatsApp). Sem URL+key o envio cai no LogSender (só loga).
+	EvolutionAPIURL string
+	EvolutionAPIKey string
+
 	// Usados só na primeira execução, quando o banco não tem nenhum usuário.
 	SeedAdminName     string
 	SeedAdminEmail    string
@@ -41,6 +45,8 @@ func Load() Config {
 		ResendAPIKey:             os.Getenv("RESEND_API_KEY"),
 		EmailFrom:                os.Getenv("EMAIL_FROM"),
 		AppURL:                   getenv("APP_URL", "http://localhost:5173"),
+		EvolutionAPIURL:          os.Getenv("EVOLUTION_API_URL"),
+		EvolutionAPIKey:          os.Getenv("EVOLUTION_API_KEY"),
 		SeedAdminName:            getenv("SEED_ADMIN_NAME", "Administrador"),
 		SeedAdminEmail:           getenv("SEED_ADMIN_EMAIL", "admin@futdarapaziada.local"),
 		SeedAdminPassword:        os.Getenv("SEED_ADMIN_PASSWORD"),

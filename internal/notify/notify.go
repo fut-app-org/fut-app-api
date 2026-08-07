@@ -1,8 +1,8 @@
 // Package notify envia lembretes de WhatsApp.
 //
-// A integração real (Twilio ou Meta Cloud API) depende de credenciais e decisão
-// de provedor; até lá o LogSender apenas registra a mensagem no log, mantendo a
-// fila e o agendamento funcionando de ponta a ponta.
+// O envio real usa uma instância Evolution Go (EvolutionSender); sem as
+// variáveis EVOLUTION_API_URL/EVOLUTION_API_KEY o LogSender apenas registra a
+// mensagem no log, mantendo a fila e o agendamento funcionando de ponta a ponta.
 package notify
 
 import "log"

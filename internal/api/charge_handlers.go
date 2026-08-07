@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"futdarapaziada/api/internal/busdays"
+	"futdarapaziada/api/internal/notify"
 	"futdarapaziada/api/internal/store"
 )
 
@@ -74,48 +75,92 @@ func (s *Server) handleGenerateCharges(w http.ResponseWriter, r *http.Request) {
 
 const defaultReminderTemplate = "Olá, {{nome}}. A mensalidade de {{mes_referencia}}, no valor de {{valor}}, ainda está pendente. O prazo para pagamento termina em {{data_vencimento}}."
 
-func (s *Server) handleWhatsAppReminder(w http.ResponseWriter, r *http.Request) {
+// reminderData carrega a cobrança, o destinatário e monta telefone e mensagem
+// do lembrete. Em caso de erro já escreve a resposta HTTP e retorna ok=false.
+func (s *Server) reminderData(w http.ResponseWriter, r *http.Request) (charge store.Charge, recipient store.User, phone, message string, ok bool) {
 	charge, err := s.store.ChargeByID(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeStoreError(w, err)
-		return
+		return charge, recipient, "", "", false
 	}
 	if charge.Status != "pending" && charge.Status != "overdue" {
 		writeError(w, http.StatusConflict, "só é possível lembrar cobranças pendentes ou vencidas")
-		return
+		return charge, recipient, "", "", false
 	}
 
-	recipient, err := s.store.UserByID(r.Context(), charge.UserID)
+	recipient, err = s.store.UserByID(r.Context(), charge.UserID)
 	if err != nil {
 		writeStoreError(w, err)
-		return
+		return charge, recipient, "", "", false
 	}
-	phone, err := normalizeWhatsAppNumber(recipient.Phone)
+	phone, err = notify.NormalizeNumber(recipient.Phone)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return charge, recipient, "", "", false
 	}
 
 	dueDate, err := time.Parse("2006-01-02", charge.DueDate)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "vencimento inválido na cobrança")
-		return
+		return charge, recipient, "", "", false
 	}
 	settings, err := s.store.Settings(r.Context())
+	if err != nil {
+		writeStoreError(w, err)
+		return charge, recipient, "", "", false
+	}
+
+	return charge, recipient, phone, reminderMessage(settings["reminder_template"], recipient.Name, charge, dueDate), true
+}
+
+func (s *Server) handleWhatsAppReminder(w http.ResponseWriter, r *http.Request) {
+	charge, _, phone, message, ok := s.reminderData(w, r)
+	if !ok {
+		return
+	}
+
+	link := "https://wa.me/" + phone + "?text=" + url.QueryEscape(message)
+	admin := currentUser(r)
+	s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_prepared",
+		fmt.Sprintf("%s preparou lembrete de WhatsApp para %s", admin.Name, charge.UserName))
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"url":     link,
+		"message": message,
+	})
+}
+
+// handleWhatsAppSend dispara o lembrete direto pelo WhatsApp (Evolution Go),
+// sem depender do wa.me/WhatsApp Web, e registra o envio em notifications.
+func (s *Server) handleWhatsAppSend(w http.ResponseWriter, r *http.Request) {
+	charge, recipient, phone, message, ok := s.reminderData(w, r)
+	if !ok {
+		return
+	}
+
+	admin := currentUser(r)
+	notificationID, err := s.store.ScheduleNotification(r.Context(), recipient.ID, &charge.ID, phone, message, time.Now())
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
 
-	message := reminderMessage(settings["reminder_template"], recipient.Name, charge, dueDate)
-	link := "https://wa.me/" + phone + "?text=" + url.QueryEscape(message)
-	admin := currentUser(r)
-	s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_prepared",
-		fmt.Sprintf("%s preparou lembrete de WhatsApp para %s", admin.Name, recipient.Name))
+	providerID, err := s.sender.Send(phone, message)
+	if err != nil {
+		_ = s.store.MarkNotificationFailed(r.Context(), notificationID, err.Error())
+		s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_failed",
+			fmt.Sprintf("falha no lembrete de WhatsApp para %s: %v", recipient.Name, err))
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("falha ao enviar WhatsApp: %v", err))
+		return
+	}
+
+	_ = s.store.MarkNotificationSent(r.Context(), notificationID, providerID)
+	s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_sent",
+		fmt.Sprintf("%s enviou lembrete de WhatsApp para %s", admin.Name, recipient.Name))
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"url":     link,
-		"message": message,
+		"message":             message,
+		"provider_message_id": providerID,
 	})
 }
 
@@ -134,29 +179,6 @@ func reminderMessage(template, recipientName string, charge store.Charge, dueDat
 		template = strings.ReplaceAll(template, placeholder, value)
 	}
 	return template
-}
-
-func normalizeWhatsAppNumber(phone string) (string, error) {
-	trimmed := strings.TrimSpace(phone)
-	var digits strings.Builder
-	for _, r := range trimmed {
-		if r >= '0' && r <= '9' {
-			digits.WriteRune(r)
-		}
-	}
-	number := digits.String()
-	if (strings.HasPrefix(trimmed, "+") || strings.HasPrefix(trimmed, "00")) && !strings.HasPrefix(number, "55") {
-		return "", errors.New("informe um WhatsApp brasileiro com DDD")
-	}
-	switch len(number) {
-	case 10, 11:
-		return "55" + number, nil
-	case 12, 13:
-		if strings.HasPrefix(number, "55") {
-			return number, nil
-		}
-	}
-	return "", errors.New("informe um WhatsApp brasileiro com DDD")
 }
 
 func (s *Server) handleMarkPaid(w http.ResponseWriter, r *http.Request) {

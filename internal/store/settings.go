@@ -42,3 +42,12 @@ func (s *Store) SettingInt(ctx context.Context, key string, fallback int) int {
 	}
 	return n
 }
+
+// SettingString lê uma configuração de texto com valor padrão.
+func (s *Store) SettingString(ctx context.Context, key, fallback string) string {
+	var value string
+	if err := s.pool.QueryRow(ctx, `select value from settings where key = $1`, key).Scan(&value); err != nil {
+		return fallback
+	}
+	return value
+}

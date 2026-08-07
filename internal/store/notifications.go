@@ -15,11 +15,12 @@ type Notification struct {
 	Status      string    `json:"status"`
 }
 
-func (s *Store) ScheduleNotification(ctx context.Context, userID string, chargeID *string, phone, message string, at time.Time) error {
-	_, err := s.pool.Exec(ctx, `
+func (s *Store) ScheduleNotification(ctx context.Context, userID string, chargeID *string, phone, message string, at time.Time) (string, error) {
+	var id string
+	err := s.pool.QueryRow(ctx, `
 		insert into notifications (user_id, charge_id, phone, message, scheduled_at)
-		values ($1, $2, $3, $4, $5)`, userID, chargeID, phone, message, at)
-	return err
+		values ($1, $2, $3, $4, $5) returning id`, userID, chargeID, phone, message, at).Scan(&id)
+	return id, err
 }
 
 // DueNotifications pega lembretes agendados cuja hora chegou e cuja cobrança
