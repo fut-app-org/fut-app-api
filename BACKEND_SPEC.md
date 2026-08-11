@@ -129,7 +129,7 @@ votes (
 ## 6. Integrações externas
 
 - **Gateway PIX** (Mercado Pago / Efí / Asaas): usado para cobrança dinâmica com webhook de confirmação automática — ver seção 7 para o modo estático próprio.
-- **WhatsApp**: Evolution Go (instância própria na VPS, `evoapicloud/evolution-go`), cliente em `internal/notify/evolution.go` com fila simples (tabela `notifications` + worker). Envio manual pelo admin via `POST /api/admin/charges/{id}/whatsapp-send`; sem `EVOLUTION_API_URL`/`EVOLUTION_API_KEY` o envio cai em stub de log.
+- **WhatsApp**: Evolution Go (instância própria na VPS, `evoapicloud/evolution-go`), cliente em `internal/notify/evolution.go` com fila simples (tabela `notifications` + worker). Envio manual pelo admin via `POST /api/admin/charges/{id}/whatsapp-send` (lembrete de cobrança) e `POST /api/admin/invites/{id}/whatsapp-send` (link de convite, exige `phone` no convite); sem `EVOLUTION_API_URL`/`EVOLUTION_API_KEY` o envio cai em stub de log.
 
 ---
 

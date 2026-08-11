@@ -21,6 +21,7 @@ type Invite struct {
 	ID          string     `json:"id"`
 	Token       string     `json:"token"`
 	InvitedName string     `json:"invited_name"`
+	Phone       string     `json:"phone"`
 	Role        string     `json:"role"`
 	CreatedBy   string     `json:"created_by"`
 	CreatorName string     `json:"creator_name"`
