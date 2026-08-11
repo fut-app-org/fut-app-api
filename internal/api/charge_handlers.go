@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -113,25 +112,8 @@ func (s *Server) reminderData(w http.ResponseWriter, r *http.Request) (charge st
 	return charge, recipient, phone, reminderMessage(settings["reminder_template"], recipient.Name, charge, dueDate), true
 }
 
-func (s *Server) handleWhatsAppReminder(w http.ResponseWriter, r *http.Request) {
-	charge, _, phone, message, ok := s.reminderData(w, r)
-	if !ok {
-		return
-	}
-
-	link := "https://wa.me/" + phone + "?text=" + url.QueryEscape(message)
-	admin := currentUser(r)
-	s.store.LogActivity(r.Context(), &admin.ID, "whatsapp_reminder_prepared",
-		fmt.Sprintf("%s preparou lembrete de WhatsApp para %s", admin.Name, charge.UserName))
-
-	writeJSON(w, http.StatusOK, map[string]string{
-		"url":     link,
-		"message": message,
-	})
-}
-
-// handleWhatsAppSend dispara o lembrete direto pelo WhatsApp (Evolution Go),
-// sem depender do wa.me/WhatsApp Web, e registra o envio em notifications.
+// handleWhatsAppSend dispara o lembrete direto pelo WhatsApp (Evolution Go)
+// e registra o envio em notifications.
 func (s *Server) handleWhatsAppSend(w http.ResponseWriter, r *http.Request) {
 	charge, recipient, phone, message, ok := s.reminderData(w, r)
 	if !ok {

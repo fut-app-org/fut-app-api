@@ -8,12 +8,12 @@ import (
 )
 
 const inviteColumns = `
-	i.id, i.token, i.invited_name, i.role, i.created_by, u.name as creator_name,
+	i.id, i.token, i.invited_name, i.phone, i.role, i.created_by, u.name as creator_name,
 	i.expires_at, i.used_at, i.used_by, i.revoked_at, i.access_count, i.created_at`
 
 func scanInvite(row pgx.Row) (Invite, error) {
 	var in Invite
-	err := row.Scan(&in.ID, &in.Token, &in.InvitedName, &in.Role, &in.CreatedBy, &in.CreatorName,
+	err := row.Scan(&in.ID, &in.Token, &in.InvitedName, &in.Phone, &in.Role, &in.CreatedBy, &in.CreatorName,
 		&in.ExpiresAt, &in.UsedAt, &in.UsedBy, &in.RevokedAt, &in.AccessCount, &in.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return in, ErrNotFound
@@ -21,13 +21,13 @@ func scanInvite(row pgx.Row) (Invite, error) {
 	return in, err
 }
 
-func (s *Store) CreateInvite(ctx context.Context, token, invitedName, role, createdBy string, validDays int) (Invite, error) {
+func (s *Store) CreateInvite(ctx context.Context, token, invitedName, phone, role, createdBy string, validDays int) (Invite, error) {
 	var id string
 	err := s.pool.QueryRow(ctx, `
-		insert into invites (token, invited_name, role, created_by, expires_at)
-		values ($1, $2, $3, $4, now() + make_interval(days => $5))
+		insert into invites (token, invited_name, phone, role, created_by, expires_at)
+		values ($1, $2, $3, $4, $5, now() + make_interval(days => $6))
 		returning id`,
-		token, invitedName, role, createdBy, validDays).Scan(&id)
+		token, invitedName, phone, role, createdBy, validDays).Scan(&id)
 	if err != nil {
 		return Invite{}, err
 	}

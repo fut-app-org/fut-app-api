@@ -92,6 +92,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/admin/invites", s.handleCreateInvite)
 			r.Get("/admin/invites", s.handleListInvites)
 			r.Post("/admin/invites/{id}/revoke", s.handleRevokeInvite)
+			r.Post("/admin/invites/{id}/whatsapp-send", s.handleInviteWhatsAppSend)
 
 			r.Post("/admin/matches", s.handleCreateMatch)
 			r.Patch("/admin/matches/{id}", s.handleUpdateMatch)
@@ -104,7 +105,6 @@ func (s *Server) Handler() http.Handler {
 
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)
-			r.Post("/admin/charges/{id}/whatsapp-reminder", s.handleWhatsAppReminder)
 			r.Post("/admin/charges/{id}/whatsapp-send", s.handleWhatsAppSend)
 			r.Post("/admin/charges/{id}/mark-paid", s.handleMarkPaid)
 			r.Post("/admin/charges/{id}/cancel", s.handleCancelCharge)

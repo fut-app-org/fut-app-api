@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"futdarapaziada/api/internal/notify"
 	"futdarapaziada/api/internal/store"
 )
 
@@ -130,6 +132,7 @@ func statusLabel(status string) string {
 func (s *Server) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		InvitedName string `json:"invited_name"`
+		Phone       string `json:"phone"`
 		Role        string `json:"role"`
 		ValidDays   int    `json:"valid_days"`
 	}
@@ -146,9 +149,19 @@ func (s *Server) handleCreateInvite(w http.ResponseWriter, r *http.Request) {
 	if body.ValidDays <= 0 {
 		body.ValidDays = s.store.SettingInt(r.Context(), "invite_valid_days", 7)
 	}
+	// O telefone é opcional, mas se vier precisa estar em formato enviável.
+	phone := strings.TrimSpace(body.Phone)
+	if phone != "" {
+		normalized, err := notify.NormalizeNumber(phone)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		phone = normalized
+	}
 
 	admin := currentUser(r)
-	invite, err := s.store.CreateInvite(r.Context(), NewInviteToken(), body.InvitedName, body.Role, admin.ID, body.ValidDays)
+	invite, err := s.store.CreateInvite(r.Context(), NewInviteToken(), body.InvitedName, phone, body.Role, admin.ID, body.ValidDays)
 	if err != nil {
 		writeStoreError(w, err)
 		return
