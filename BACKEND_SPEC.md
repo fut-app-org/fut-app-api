@@ -106,11 +106,12 @@ votes (
 - `GET /api/admin/dashboard`
 - `GET /api/admin/users`, `PATCH /api/admin/users/:id` (status/role)
 - `POST /api/admin/invites`, `GET /api/admin/invites`, `POST /api/admin/invites/:id/revoke`
-- `GET /api/admin/charges?month=`, `POST /api/admin/charges/generate` (body `{total_amount, month}` — divide por usuários ativos), `POST /api/admin/charges/:id/mark-paid`
+- `GET /api/admin/charges?month=` (retorna `{batches, charges}` — todos os lotes do mês), `POST /api/admin/charges/generate` (mensalidade, body `{total_amount, month}` — divide por usuários ativos; única por mês), `POST /api/admin/charges/generate-match` (avulsa, body `{title, total_amount_cents, user_ids[]}` — rateia entre os participantes ativos selecionados; ilimitada por mês), `DELETE /api/admin/charges/batches/:id` (exclui lote sem pagamentos), `POST /api/admin/charges/:id/mark-paid`
 
 ## 4. Regras de negócio chave
 
 - Rateio: `amount_cents = total_amount_cents / count(active_users)` no momento da geração — **fotografia fixa**, não recalcula se o número de ativos mudar depois.
+- Cobranças avulsas (`charge_batches.kind='match'`): ilimitadas por mês, rateio do valor total entre os participantes ativos selecionados manualmente; mensalidade (`kind='monthly'`) única por mês (índice único parcial); lote sem pagamentos pode ser excluído.
 - Vencimento: 5º dia útil após geração da cobrança.
 - Inadimplência: cron diário marca `status='inactive'` em usuários com cobrança vencida há mais de N dias (configurável); reativa ao pagar.
 - Confirmação: fecha automaticamente no `confirmation_deadline`; sorteio de times só disponível após fechamento.

@@ -24,21 +24,21 @@ func (s *Server) handleMyCharges(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminCharges(w http.ResponseWriter, r *http.Request) {
 	month := r.URL.Query().Get("month")
 
-	batch, err := s.store.BatchByMonth(r.Context(), month)
-	if errors.Is(err, store.ErrNotFound) {
-		writeJSON(w, http.StatusOK, map[string]any{"batch": nil, "charges": []store.Charge{}})
-		return
-	}
+	batches, err := s.store.BatchesByMonth(r.Context(), month)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	charges, err := s.store.ChargesByMonth(r.Context(), batch.ReferenceMonth)
+	if len(batches) == 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"batches": []store.ChargeBatch{}, "charges": []store.Charge{}})
+		return
+	}
+	charges, err := s.store.ChargesByMonth(r.Context(), batches[0].ReferenceMonth)
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"batch": batch, "charges": orEmpty(charges)})
+	writeJSON(w, http.StatusOK, map[string]any{"batches": orEmpty(batches), "charges": orEmpty(charges)})
 }
 
 func (s *Server) handleGenerateCharges(w http.ResponseWriter, r *http.Request) {
@@ -70,6 +70,78 @@ func (s *Server) handleGenerateCharges(w http.ResponseWriter, r *http.Request) {
 		fmt.Sprintf("%s gerou %d cobranças de %s para %s",
 			user.Name, batch.UserCount, formatCentsBR(batch.IndividualAmountCents), batch.ReferenceMonth))
 	writeJSON(w, http.StatusCreated, batch)
+}
+
+// validateMatchChargeInput valida o corpo da cobrança avulsa. O mês é opcional:
+// vazio, o handler usa o mês atual.
+func validateMatchChargeInput(month, title string, totalCents int64, userIDs []string) error {
+	if strings.TrimSpace(title) == "" {
+		return errors.New("informe o título da cobrança")
+	}
+	if totalCents <= 0 {
+		return errors.New("informe total_amount_cents > 0")
+	}
+	if len(userIDs) == 0 {
+		return errors.New("selecione ao menos um participante")
+	}
+	if month != "" && (len(month) != 7 || !strings.Contains(month, "-")) {
+		return errors.New("informe month no formato YYYY-MM")
+	}
+	return nil
+}
+
+func (s *Server) handleGenerateMatchCharges(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Month            string   `json:"month"` // YYYY-MM, opcional
+		Title            string   `json:"title"`
+		TotalAmountCents int64    `json:"total_amount_cents"`
+		UserIDs          []string `json:"user_ids"`
+	}
+	if !decodeJSON(w, r, &body) {
+		return
+	}
+	if err := validateMatchChargeInput(body.Month, body.Title, body.TotalAmountCents, body.UserIDs); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	month := body.Month
+	if month == "" {
+		month = time.Now().Format("2006-01")
+	}
+
+	user := currentUser(r)
+	dueDate := busdays.AddBusinessDays(time.Now(), 5)
+	batch, err := s.store.GenerateMatchBatch(r.Context(), month, strings.TrimSpace(body.Title), body.TotalAmountCents, dueDate, user.ID, body.UserIDs)
+	if errors.Is(err, store.ErrInvalidParticipants) {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+
+	s.store.LogActivity(r.Context(), &user.ID, "match_charges_generated",
+		fmt.Sprintf("%s gerou cobrança avulsa %q: %d participantes × %s",
+			user.Name, batch.Title, batch.UserCount, formatCentsBR(batch.IndividualAmountCents)))
+	writeJSON(w, http.StatusCreated, batch)
+}
+
+func (s *Server) handleDeleteBatch(w http.ResponseWriter, r *http.Request) {
+	batchID := r.PathValue("id")
+	if err := s.store.DeleteBatch(r.Context(), batchID); err != nil {
+		if errors.Is(err, store.ErrBatchHasPayments) {
+			writeError(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeStoreError(w, err)
+		return
+	}
+
+	user := currentUser(r)
+	s.store.LogActivity(r.Context(), &user.ID, "charge_batch_deleted",
+		fmt.Sprintf("%s excluiu o lote de cobranças %s", user.Name, batchID))
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 const defaultReminderTemplate = "Olá, {{nome}}. A mensalidade de {{mes_referencia}}, no valor de {{valor}}, ainda está pendente. O prazo para pagamento termina em {{data_vencimento}}."

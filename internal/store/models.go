@@ -81,6 +81,8 @@ type TeamMember struct {
 type ChargeBatch struct {
 	ID                    string    `json:"id"`
 	ReferenceMonth        string    `json:"reference_month"` // YYYY-MM
+	Kind                  string    `json:"kind"`            // "monthly" ou "match"
+	Title                 string    `json:"title"`           // rótulo dos lotes de partida avulsa
 	TotalAmountCents      int64     `json:"total_amount_cents"`
 	UserCount             int       `json:"user_count"`
 	IndividualAmountCents int64     `json:"individual_amount_cents"`
@@ -93,6 +95,8 @@ type ChargeBatch struct {
 type Charge struct {
 	ID              string     `json:"id"`
 	BatchID         string     `json:"batch_id"`
+	BatchKind       string     `json:"batch_kind"`
+	BatchTitle      string     `json:"batch_title"`
 	UserID          string     `json:"user_id"`
 	UserName        string     `json:"user_name"`
 	UserRole        string     `json:"user_role"`

@@ -105,6 +105,8 @@ func (s *Server) Handler() http.Handler {
 
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)
+			r.Post("/admin/charges/generate-match", s.handleGenerateMatchCharges)
+			r.Delete("/admin/charges/batches/{id}", s.handleDeleteBatch)
 			r.Post("/admin/charges/{id}/whatsapp-send", s.handleWhatsAppSend)
 			r.Post("/admin/charges/{id}/mark-paid", s.handleMarkPaid)
 			r.Post("/admin/charges/{id}/cancel", s.handleCancelCharge)
