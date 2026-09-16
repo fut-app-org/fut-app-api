@@ -15,7 +15,7 @@ type Dashboard struct {
 }
 
 // DashboardStats agrega os indicadores do painel admin. Os valores financeiros
-// referem-se ao lote de cobrança mais recente.
+// somam todos os lotes (mensalidade e partidas avulsas) do mês mais recente.
 func (s *Store) DashboardStats(ctx context.Context) (Dashboard, error) {
 	var d Dashboard
 	err := s.pool.QueryRow(ctx, `

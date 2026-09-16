@@ -9,19 +9,20 @@ import (
 )
 
 const chargeColumns = `
-	c.id, c.batch_id, c.user_id, u.name, u.role, u.avatar_color,
+	c.id, c.batch_id, b.kind, b.title, c.user_id, u.name, u.role, u.avatar_color,
 	to_char(c.reference_month, 'YYYY-MM'), c.amount_cents, c.status, c.due_date::text,
 	c.paid_at, c.paid_method, c.registered_by, coalesce(r.name, ''), c.pix_payload,
 	c.pix_ticket_url, c.pix_qr_code_base64, c.provider_order_id, c.created_at`
 
 const chargeJoins = `
 	from charges c
+	join charge_batches b on b.id = c.batch_id
 	join users u on u.id = c.user_id
 	left join users r on r.id = c.registered_by`
 
 func scanCharge(row pgx.Row) (Charge, error) {
 	var c Charge
-	err := row.Scan(&c.ID, &c.BatchID, &c.UserID, &c.UserName, &c.UserRole, &c.AvatarColor,
+	err := row.Scan(&c.ID, &c.BatchID, &c.BatchKind, &c.BatchTitle, &c.UserID, &c.UserName, &c.UserRole, &c.AvatarColor,
 		&c.ReferenceMonth, &c.AmountCents, &c.Status, &c.DueDate,
 		&c.PaidAt, &c.PaidMethod, &c.RegisteredBy, &c.RegisteredName, &c.PixPayload,
 		&c.PixTicketURL, &c.PixQRCodeBase64, &c.ProviderOrderID, &c.CreatedAt)
@@ -139,30 +140,64 @@ func collectCharges(rows pgx.Rows) ([]Charge, error) {
 	return charges, rows.Err()
 }
 
-func (s *Store) BatchByMonth(ctx context.Context, month string) (ChargeBatch, error) {
-	query := `
-		select b.id, to_char(b.reference_month, 'YYYY-MM'), b.total_amount_cents, b.user_count,
-		       b.individual_amount_cents, b.due_date::text, b.generated_by, u.name, b.created_at
-		from charge_batches b join users u on u.id = b.generated_by`
-	var row pgx.Row
-	if month != "" {
-		row = s.pool.QueryRow(ctx, query+` where to_char(b.reference_month, 'YYYY-MM') = $1`, month)
-	} else {
-		row = s.pool.QueryRow(ctx, query+` order by b.reference_month desc limit 1`)
-	}
+const batchColumns = `
+	b.id, to_char(b.reference_month, 'YYYY-MM'), b.kind, b.title,
+	b.total_amount_cents, b.user_count, b.individual_amount_cents, b.due_date::text,
+	b.generated_by, u.name, b.created_at`
+
+const batchJoins = `
+	from charge_batches b join users u on u.id = b.generated_by`
+
+func scanBatch(row pgx.Row) (ChargeBatch, error) {
 	var b ChargeBatch
-	err := row.Scan(&b.ID, &b.ReferenceMonth, &b.TotalAmountCents, &b.UserCount,
-		&b.IndividualAmountCents, &b.DueDate, &b.GeneratedBy, &b.GeneratedByName, &b.CreatedAt)
+	err := row.Scan(&b.ID, &b.ReferenceMonth, &b.Kind, &b.Title,
+		&b.TotalAmountCents, &b.UserCount, &b.IndividualAmountCents, &b.DueDate,
+		&b.GeneratedBy, &b.GeneratedByName, &b.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return b, ErrNotFound
 	}
 	return b, err
 }
 
+// BatchesByMonth lista todos os lotes do mês (YYYY-MM) em ordem de criação;
+// com o mês vazio, usa o mês do lote mais recente. Sem lotes, retorna lista vazia.
+func (s *Store) BatchesByMonth(ctx context.Context, month string) ([]ChargeBatch, error) {
+	query := `select ` + batchColumns + batchJoins
+	args := []any{}
+	if month != "" {
+		query += ` where to_char(b.reference_month, 'YYYY-MM') = $1`
+		args = append(args, month)
+	} else {
+		query += ` where b.reference_month = (select max(reference_month) from charge_batches)`
+	}
+	query += ` order by b.created_at`
+
+	rows, err := s.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var batches []ChargeBatch
+	for rows.Next() {
+		b, err := scanBatch(rows)
+		if err != nil {
+			return nil, err
+		}
+		batches = append(batches, b)
+	}
+	return batches, rows.Err()
+}
+
+func (s *Store) batchByID(ctx context.Context, id string) (ChargeBatch, error) {
+	return scanBatch(s.pool.QueryRow(ctx, `select `+batchColumns+batchJoins+` where b.id = $1`, id))
+}
+
 var ErrBatchExists = errors.New("já existe cobrança gerada para este mês")
 
-// GenerateBatch cria o lote do mês e uma cobrança por usuário ativo, registrando a
-// fotografia do rateio (valor total, quantidade e valor individual fixos).
+// GenerateBatch cria o lote de mensalidade do mês e uma cobrança por usuário ativo,
+// registrando a fotografia do rateio (valor total, quantidade e valor individual fixos).
+// A mensalidade é única por mês; lotes de partida avulsa não bloqueiam a geração.
 func (s *Store) GenerateBatch(ctx context.Context, month string, totalCents int64, dueDate time.Time, generatedBy string) (ChargeBatch, error) {
 	users, err := s.ActiveUsers(ctx)
 	if err != nil {
@@ -181,7 +216,7 @@ func (s *Store) GenerateBatch(ctx context.Context, month string, totalCents int6
 
 	var exists bool
 	if err := tx.QueryRow(ctx,
-		`select exists (select 1 from charge_batches where reference_month = ($1 || '-01')::date)`, month).Scan(&exists); err != nil {
+		`select exists (select 1 from charge_batches where reference_month = ($1 || '-01')::date and kind = 'monthly')`, month).Scan(&exists); err != nil {
 		return ChargeBatch{}, err
 	}
 	if exists {
@@ -190,8 +225,8 @@ func (s *Store) GenerateBatch(ctx context.Context, month string, totalCents int6
 
 	var batchID string
 	err = tx.QueryRow(ctx, `
-		insert into charge_batches (reference_month, total_amount_cents, user_count, individual_amount_cents, due_date, generated_by)
-		values (($1 || '-01')::date, $2, $3, $4, $5, $6) returning id`,
+		insert into charge_batches (reference_month, kind, total_amount_cents, user_count, individual_amount_cents, due_date, generated_by)
+		values (($1 || '-01')::date, 'monthly', $2, $3, $4, $5, $6) returning id`,
 		month, totalCents, len(users), individual, dueDate, generatedBy).Scan(&batchID)
 	if err != nil {
 		return ChargeBatch{}, err
@@ -209,7 +244,90 @@ func (s *Store) GenerateBatch(ctx context.Context, month string, totalCents int6
 	if err := tx.Commit(ctx); err != nil {
 		return ChargeBatch{}, err
 	}
-	return s.BatchByMonth(ctx, month)
+	return s.batchByID(ctx, batchID)
+}
+
+var ErrInvalidParticipants = errors.New("todos os participantes precisam estar ativos")
+
+// GenerateMatchBatch cria um lote de partida avulsa rateando o valor total entre os
+// participantes escolhidos. Diferente da mensalidade, não há limite por mês.
+func (s *Store) GenerateMatchBatch(ctx context.Context, month, title string, totalCents int64, dueDate time.Time, generatedBy string, userIDs []string) (ChargeBatch, error) {
+	rows, err := s.pool.Query(ctx,
+		`select id from users where id = any($1::uuid[]) and status = 'active'`, userIDs)
+	if err != nil {
+		return ChargeBatch{}, err
+	}
+	activeIDs, err := collectIDs(rows)
+	rows.Close()
+	if err != nil {
+		return ChargeBatch{}, err
+	}
+	if len(activeIDs) != len(userIDs) {
+		return ChargeBatch{}, ErrInvalidParticipants
+	}
+	individual := totalCents / int64(len(userIDs))
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return ChargeBatch{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	var batchID string
+	err = tx.QueryRow(ctx, `
+		insert into charge_batches (reference_month, kind, title, total_amount_cents, user_count, individual_amount_cents, due_date, generated_by)
+		values (($1 || '-01')::date, 'match', $2, $3, $4, $5, $6, $7) returning id`,
+		month, title, totalCents, len(userIDs), individual, dueDate, generatedBy).Scan(&batchID)
+	if err != nil {
+		return ChargeBatch{}, err
+	}
+
+	for _, userID := range userIDs {
+		_, err := tx.Exec(ctx, `
+			insert into charges (batch_id, user_id, reference_month, amount_cents, due_date)
+			values ($1, $2, ($3 || '-01')::date, $4, $5)`,
+			batchID, userID, month, individual, dueDate)
+		if err != nil {
+			return ChargeBatch{}, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return ChargeBatch{}, err
+	}
+	return s.batchByID(ctx, batchID)
+}
+
+var ErrBatchHasPayments = errors.New("lote possui pagamentos registrados")
+
+// DeleteBatch remove um lote inteiro e suas cobranças, somente se nenhuma delas
+// tiver pagamento registrado.
+func (s *Store) DeleteBatch(ctx context.Context, batchID string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var hasPayments bool
+	if err := tx.QueryRow(ctx,
+		`select exists (select 1 from charges where batch_id = $1 and status in ('paid', 'manual_paid'))`, batchID).Scan(&hasPayments); err != nil {
+		return err
+	}
+	if hasPayments {
+		return ErrBatchHasPayments
+	}
+
+	if _, err := tx.Exec(ctx, `delete from charges where batch_id = $1`, batchID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `delete from charge_batches where id = $1`, batchID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
 }
 
 // MarkChargePaid registra o pagamento e, se o usuário estava inativo por

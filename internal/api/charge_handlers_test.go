@@ -7,6 +7,35 @@ import (
 	"futdarapaziada/api/internal/store"
 )
 
+func TestValidateMatchChargeInput(t *testing.T) {
+	tests := []struct {
+		name       string
+		month      string
+		title      string
+		totalCents int64
+		userIDs    []string
+		wantErr    bool
+	}{
+		{name: "válido com mês", month: "2026-09", title: "Quadra society", totalCents: 30000, userIDs: []string{"a", "b"}},
+		{name: "válido sem mês", title: "Quadra society", totalCents: 30000, userIDs: []string{"a"}},
+		{name: "título vazio", title: "  ", totalCents: 30000, userIDs: []string{"a"}, wantErr: true},
+		{name: "total zerado", title: "Quadra", totalCents: 0, userIDs: []string{"a"}, wantErr: true},
+		{name: "total negativo", title: "Quadra", totalCents: -100, userIDs: []string{"a"}, wantErr: true},
+		{name: "sem participantes", title: "Quadra", totalCents: 30000, userIDs: nil, wantErr: true},
+		{name: "mês inválido", month: "2026/09", title: "Quadra", totalCents: 30000, userIDs: []string{"a"}, wantErr: true},
+		{name: "mês curto", month: "2026-9", title: "Quadra", totalCents: 30000, userIDs: []string{"a"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateMatchChargeInput(tt.month, tt.title, tt.totalCents, tt.userIDs)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateMatchChargeInput() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestReminderMessage(t *testing.T) {
 	charge := store.Charge{
 		ReferenceMonth: "2026-07",
