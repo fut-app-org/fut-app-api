@@ -104,6 +104,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/matches/{id}/finish", s.handleFinishMatch)
 			r.Post("/matches/{id}/close-voting", s.handleCloseVoting)
 
+			r.Get("/admin/team-presets", s.handleListTeamPresets)
+			r.Post("/admin/team-presets", s.handleCreateTeamPreset)
+			r.Patch("/admin/team-presets/{id}", s.handleUpdateTeamPreset)
+			r.Delete("/admin/team-presets/{id}", s.handleDeleteTeamPreset)
+
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)
 			r.Post("/admin/charges/generate-match", s.handleGenerateMatchCharges)

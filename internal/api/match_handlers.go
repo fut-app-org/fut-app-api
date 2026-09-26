@@ -369,7 +369,8 @@ func (s *Server) handleReopenConfirmations(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleDrawTeams(w http.ResponseWriter, r *http.Request) {
 	matchID := r.PathValue("id")
 	var body struct {
-		TeamCount int `json:"team_count"`
+		TeamCount int        `json:"team_count"`
+		Teams     [][]string `json:"teams"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -401,7 +402,17 @@ func (s *Server) handleDrawTeams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teams := draw.Teams(players, body.TeamCount)
+	// Com "teams" no body a escalação é manual; caso contrário, sorteio aleatório.
+	var teams []store.Team
+	if len(body.Teams) > 0 {
+		teams, err = draw.Manual(players, body.Teams)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else {
+		teams = draw.Teams(players, body.TeamCount)
+	}
 	if err := s.store.ReplaceTeams(r.Context(), matchID, teams); err != nil {
 		writeStoreError(w, err)
 		return

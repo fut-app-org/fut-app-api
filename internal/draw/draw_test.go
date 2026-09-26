@@ -53,3 +53,50 @@ func TestTeamsClampCount(t *testing.T) {
 		t.Errorf("teamCount 9 deveria virar %d, obteve %d", MaxTeams, got)
 	}
 }
+
+func TestManual(t *testing.T) {
+	list := players(5)
+
+	t.Run("sucesso", func(t *testing.T) {
+		teams, err := Manual(list, [][]string{{"u0", "u1", "u2"}, {"u3", "u4"}})
+		if err != nil {
+			t.Fatalf("erro inesperado: %v", err)
+		}
+		if len(teams) != 2 {
+			t.Fatalf("obteve %d times, quer 2", len(teams))
+		}
+		if got := len(teams[0].Members); got != 3 {
+			t.Errorf("time 1 com %d jogadores, quer 3", got)
+		}
+		if teams[0].Members[0].UserID != "u0" || teams[1].Members[1].UserID != "u4" {
+			t.Errorf("escalação não preservou a ordem informada")
+		}
+		if teams[0].TeamName == "" || teams[1].TeamColor == "" {
+			t.Errorf("times deveriam herdar nome e cor dos presets visuais")
+		}
+	})
+
+	t.Run("jogador duplicado", func(t *testing.T) {
+		if _, err := Manual(list, [][]string{{"u0", "u1", "u2"}, {"u2", "u3", "u4"}}); err == nil {
+			t.Error("esperava erro para jogador em dois times")
+		}
+	})
+
+	t.Run("jogador não confirmado", func(t *testing.T) {
+		if _, err := Manual(list, [][]string{{"u0", "u1", "u2"}, {"u3", "u4", "u9"}}); err == nil {
+			t.Error("esperava erro para ID fora dos confirmados")
+		}
+	})
+
+	t.Run("confirmado sem time", func(t *testing.T) {
+		if _, err := Manual(list, [][]string{{"u0", "u1"}, {"u2", "u3"}}); err == nil {
+			t.Error("esperava erro para confirmado não escalado")
+		}
+	})
+
+	t.Run("quantidade de times inválida", func(t *testing.T) {
+		if _, err := Manual(list, [][]string{{"u0", "u1", "u2", "u3", "u4"}}); err == nil {
+			t.Error("esperava erro para menos de 2 times")
+		}
+	})
+}
