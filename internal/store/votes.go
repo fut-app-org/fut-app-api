@@ -2,34 +2,54 @@ package store
 
 import (
 	"context"
+	"errors"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// CastVote grava (ou troca) o voto do usuário na categoria.
+// ErrDuplicateVote indica voto repetido no mesmo jogador dentro da categoria.
+var ErrDuplicateVote = errors.New("você já votou neste jogador nesta categoria")
+
+// CastVote grava o voto do usuário na categoria. Cada participante pode votar
+// em até 2 jogadores distintos por categoria — o limite é validado no handler
+// (handleVote) e a duplicidade é garantida pela constraint unique do banco.
 func (s *Store) CastVote(ctx context.Context, matchID, voterID, category, candidateID string) error {
 	_, err := s.pool.Exec(ctx, `
 		insert into votes (match_id, voter_id, category, candidate_id)
-		values ($1, $2, $3, $4)
-		on conflict (match_id, voter_id, category) do update set candidate_id = $4, created_at = now()`,
+		values ($1, $2, $3, $4)`,
+		matchID, voterID, category, candidateID)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" { // unique_violation
+		return ErrDuplicateVote
+	}
+	return err
+}
+
+// RemoveVote desfaz um voto do usuário (clique num jogador já selecionado).
+func (s *Store) RemoveVote(ctx context.Context, matchID, voterID, category, candidateID string) error {
+	_, err := s.pool.Exec(ctx, `
+		delete from votes
+		where match_id = $1 and voter_id = $2 and category = $3 and candidate_id = $4`,
 		matchID, voterID, category, candidateID)
 	return err
 }
 
-// MyVotes retorna categoria → candidato votado pelo usuário nesta partida.
-func (s *Store) MyVotes(ctx context.Context, matchID, voterID string) (map[string]string, error) {
+// MyVotes retorna categoria → candidatos votados pelo usuário nesta partida.
+func (s *Store) MyVotes(ctx context.Context, matchID, voterID string) (map[string][]string, error) {
 	rows, err := s.pool.Query(ctx,
-		`select category, candidate_id from votes where match_id = $1 and voter_id = $2`, matchID, voterID)
+		`select category, candidate_id from votes where match_id = $1 and voter_id = $2 order by created_at`, matchID, voterID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	votes := map[string]string{}
+	votes := map[string][]string{}
 	for rows.Next() {
 		var category, candidate string
 		if err := rows.Scan(&category, &candidate); err != nil {
 			return nil, err
 		}
-		votes[category] = candidate
+		votes[category] = append(votes[category], candidate)
 	}
 	return votes, rows.Err()
 }

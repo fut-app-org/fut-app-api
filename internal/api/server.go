@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/matches/{id}/confirmations", s.handleConfirmations)
 			r.Get("/matches/{id}/teams", s.handleTeams)
 			r.Post("/matches/{id}/votes", s.handleVote)
+			r.Delete("/matches/{id}/votes/{category}/{candidateId}", s.handleRemoveVote)
 			r.Get("/matches/{id}/media", s.handleListMedia)
 			r.Post("/matches/{id}/media", s.handleUploadMedia)
 			r.Delete("/media/{id}", s.handleDeleteMedia)
