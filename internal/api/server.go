@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 			r.Get("/matches/{id}/confirmations", s.handleConfirmations)
 			r.Get("/matches/{id}/teams", s.handleTeams)
 			r.Post("/matches/{id}/votes", s.handleVote)
+			r.Delete("/matches/{id}/votes/{category}/{candidateId}", s.handleRemoveVote)
 			r.Get("/matches/{id}/media", s.handleListMedia)
 			r.Post("/matches/{id}/media", s.handleUploadMedia)
 			r.Delete("/media/{id}", s.handleDeleteMedia)
@@ -102,6 +103,11 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/matches/{id}/draw-teams", s.handleDrawTeams)
 			r.Post("/matches/{id}/finish", s.handleFinishMatch)
 			r.Post("/matches/{id}/close-voting", s.handleCloseVoting)
+
+			r.Get("/admin/team-presets", s.handleListTeamPresets)
+			r.Post("/admin/team-presets", s.handleCreateTeamPreset)
+			r.Patch("/admin/team-presets/{id}", s.handleUpdateTeamPreset)
+			r.Delete("/admin/team-presets/{id}", s.handleDeleteTeamPreset)
 
 			r.Get("/admin/charges", s.handleAdminCharges)
 			r.Post("/admin/charges/generate", s.handleGenerateCharges)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -206,7 +207,55 @@ func (s *Server) handleVote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Limite de 2 votos por categoria, em jogadores distintos.
+	myVotes, err := s.store.MyVotes(r.Context(), matchID, user.ID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if slices.Contains(myVotes[body.Category], body.CandidateID) {
+		writeError(w, http.StatusConflict, store.ErrDuplicateVote.Error())
+		return
+	}
+	if len(myVotes[body.Category]) >= 2 {
+		writeError(w, http.StatusConflict, "você já usou seus 2 votos nesta categoria")
+		return
+	}
+
 	if err := s.store.CastVote(r.Context(), matchID, user.ID, body.Category, body.CandidateID); err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleRemoveVote desfaz o voto do usuário num candidato da categoria.
+func (s *Server) handleRemoveVote(w http.ResponseWriter, r *http.Request) {
+	matchID := r.PathValue("id")
+	category := r.PathValue("category")
+	candidateID := r.PathValue("candidateId")
+	user := currentUser(r)
+
+	if category != "top_scorer" && category != "worst_player" {
+		writeError(w, http.StatusBadRequest, "categoria inválida")
+		return
+	}
+	if _, err := uuid.Parse(candidateID); err != nil {
+		writeError(w, http.StatusBadRequest, "candidate_id inválido")
+		return
+	}
+
+	match, err := s.store.MatchByID(r.Context(), matchID)
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	if match.Status != "voting" {
+		writeError(w, http.StatusConflict, "a votação desta partida não está aberta")
+		return
+	}
+
+	if err := s.store.RemoveVote(r.Context(), matchID, user.ID, category, candidateID); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -320,7 +369,8 @@ func (s *Server) handleReopenConfirmations(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleDrawTeams(w http.ResponseWriter, r *http.Request) {
 	matchID := r.PathValue("id")
 	var body struct {
-		TeamCount int `json:"team_count"`
+		TeamCount int        `json:"team_count"`
+		Teams     [][]string `json:"teams"`
 	}
 	if !decodeJSON(w, r, &body) {
 		return
@@ -352,7 +402,17 @@ func (s *Server) handleDrawTeams(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	teams := draw.Teams(players, body.TeamCount)
+	// Com "teams" no body a escalação é manual; caso contrário, sorteio aleatório.
+	var teams []store.Team
+	if len(body.Teams) > 0 {
+		teams, err = draw.Manual(players, body.Teams)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	} else {
+		teams = draw.Teams(players, body.TeamCount)
+	}
 	if err := s.store.ReplaceTeams(r.Context(), matchID, teams); err != nil {
 		writeStoreError(w, err)
 		return

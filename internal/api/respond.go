@@ -43,6 +43,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrBatchExists):
 		writeError(w, http.StatusConflict, err.Error())
+	case errors.Is(err, store.ErrDuplicateVote):
+		writeError(w, http.StatusConflict, err.Error())
 	default:
 		log.Printf("erro interno: %v", err)
 		writeError(w, http.StatusInternalServerError, "erro interno")

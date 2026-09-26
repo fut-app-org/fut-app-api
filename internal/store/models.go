@@ -78,6 +78,14 @@ type TeamMember struct {
 	AvatarColor string `json:"avatar_color"`
 }
 
+// TeamPreset é um grupo salvo de jogadores para agilizar a escalação manual.
+type TeamPreset struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	MemberIDs []string  `json:"member_ids"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type ChargeBatch struct {
 	ID                    string    `json:"id"`
 	ReferenceMonth        string    `json:"reference_month"` // YYYY-MM

@@ -68,7 +68,7 @@ votes (
   id uuid pk, match_id uuid references matches(id), voter_id uuid references users(id),
   category text check (category in ('top_scorer','worst_player')),
   candidate_id uuid references users(id),
-  unique (match_id, voter_id, category)
+  unique (match_id, voter_id, category, candidate_id)  -- até 2 votos por categoria, em jogadores distintos
 )
 ```
 
@@ -96,7 +96,8 @@ votes (
 **Histórico / votação**
 - `GET /api/matches?month=` — lista de partidas
 - `GET /api/matches/:id` — detalhe + status de votação
-- `POST /api/matches/:id/votes` — body `{category, candidate_id}`
+- `POST /api/matches/:id/votes` — body `{category, candidate_id}` (máx. 2 votos por categoria, sem repetir jogador)
+- `DELETE /api/matches/:id/votes/:category/:candidate_id` — desfaz um voto
 - `GET /api/matches/:id/media`, `POST /api/matches/:id/media`
 
 **Perfil**
@@ -115,7 +116,7 @@ votes (
 - Vencimento: 5º dia útil após geração da cobrança.
 - Inadimplência: cron diário marca `status='inactive'` em usuários com cobrança vencida há mais de N dias (configurável); reativa ao pagar.
 - Confirmação: fecha automaticamente no `confirmation_deadline`; sorteio de times só disponível após fechamento.
-- Votação: abre ao final da partida, fecha em X dias (configurável), sem voto em si mesmo na categoria "perna de pau".
+- Votação: abre ao final da partida, fecha em X dias (configurável), até 2 votos por categoria em jogadores distintos, sem voto em si mesmo na categoria "perna de pau".
 
 ## 5. Jobs agendados (`robfig/cron`)
 
