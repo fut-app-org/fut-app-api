@@ -62,6 +62,12 @@ func (s *Store) CreateMatch(ctx context.Context, in MatchInput, createdBy string
 	if err != nil {
 		return Match{}, err
 	}
+	// Queue inside the transaction so a failed creation can never send a push.
+	_, err = tx.Exec(ctx, `insert into match_push_deliveries(subscription_id,match_id,kind)
+ select p.id,$1,'created' from push_subscriptions p join users u on u.id=p.user_id where u.status='active'`, id)
+	if err != nil {
+		return Match{}, err
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return Match{}, err
 	}

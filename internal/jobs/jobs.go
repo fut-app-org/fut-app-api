@@ -11,13 +11,16 @@ import (
 	"github.com/robfig/cron/v3"
 
 	"futdarapaziada/api/internal/notify"
+	"futdarapaziada/api/internal/push"
 	"futdarapaziada/api/internal/store"
 )
 
 type Runner struct {
-	store  *store.Store
-	sender notify.Sender
-	cron   *cron.Cron
+	store        *store.Store
+	sender       notify.Sender
+	cron         *cron.Cron
+	push         *push.Client
+	reminderLead time.Duration
 }
 
 func New(st *store.Store, sender notify.Sender) *Runner {
@@ -32,6 +35,9 @@ func (r *Runner) Start() {
 		}
 	}
 
+	if r.push.Enabled() {
+		mustAdd("* * * * *", r.sendMatchPush)
+	}
 	mustAdd("* * * * *", r.closeExpiredConfirmations) // a cada minuto
 	mustAdd("*/10 * * * *", r.closeExpiredVoting)
 	mustAdd("15 0 * * *", r.markOverdueAndInactivate) // diário, 00h15

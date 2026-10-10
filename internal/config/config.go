@@ -15,6 +15,12 @@ type Config struct {
 	JWTSecret   []byte
 	Env         string // "development" ou "production"
 	MediaDir    string
+	DisableJobs bool // desativa o cron em instâncias locais que compartilham o banco
+
+	VAPIDPublicKey     string
+	VAPIDPrivateKey    string
+	VAPIDSubject       string
+	MatchReminderHours int
 
 	MercadoPagoAccessToken   string
 	MercadoPagoWebhookSecret string
@@ -35,10 +41,15 @@ type Config struct {
 
 func Load() Config {
 	cfg := Config{
+		VAPIDPublicKey:           os.Getenv("VAPID_PUBLIC_KEY"),
+		VAPIDPrivateKey:          os.Getenv("VAPID_PRIVATE_KEY"),
+		VAPIDSubject:             os.Getenv("VAPID_SUBJECT"),
+		MatchReminderHours:       reminderHours(),
 		DatabaseURL:              getenv("DATABASE_URL", "postgres://futapp:futapp@localhost:5432/futapp?sslmode=disable"),
 		Port:                     getenv("PORT", "8080"),
 		Env:                      getenv("ENV", "development"),
 		MediaDir:                 getenv("MEDIA_DIR", "./data/media"),
+		DisableJobs:              getenvBool("DISABLE_JOBS"),
 		MercadoPagoAccessToken:   os.Getenv("MERCADO_PAGO_ACCESS_TOKEN"),
 		MercadoPagoWebhookSecret: os.Getenv("MERCADO_PAGO_WEBHOOK_SECRET"),
 		MercadoPagoTestMode:      getenvBool("MERCADO_PAGO_TEST_MODE"),
@@ -76,4 +87,12 @@ func getenv(key, fallback string) string {
 func getenvBool(key string) bool {
 	value, err := strconv.ParseBool(os.Getenv(key))
 	return err == nil && value
+}
+
+func reminderHours() int {
+	value, err := strconv.Atoi(getenv("MATCH_REMINDER_HOURS", "2"))
+	if err != nil || value < 0 || value > 168 {
+		return 2
+	}
+	return value
 }
