@@ -15,6 +15,7 @@ import (
 	"futdarapaziada/api/internal/config"
 	"futdarapaziada/api/internal/jobs"
 	"futdarapaziada/api/internal/notify"
+	"futdarapaziada/api/internal/push"
 	"futdarapaziada/api/internal/store"
 )
 
@@ -46,9 +47,14 @@ func main() {
 		log.Println("EVOLUTION_API_URL/EVOLUTION_API_KEY não definidos; WhatsApp apenas em log")
 	}
 
-	runner := jobs.New(st, sender)
-	runner.Start()
-	defer runner.Stop()
+	if !cfg.DisableJobs {
+		runner := jobs.New(st, sender)
+		runner.ConfigurePush(push.New(cfg.VAPIDPublicKey, cfg.VAPIDPrivateKey, cfg.VAPIDSubject), cfg.MatchReminderHours)
+		runner.Start()
+		defer runner.Stop()
+	} else {
+		log.Println("tarefas agendadas desativadas (DISABLE_JOBS=true)")
+	}
 
 	server := api.NewServer(cfg, st, sender)
 	log.Printf("API ouvindo em :%s", cfg.Port)

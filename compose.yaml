@@ -26,6 +26,10 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-futapp}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-futapp}?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      MATCH_REMINDER_HOURS: ${MATCH_REMINDER_HOURS:-2}
       ENV: production
       PORT: 8080
       MEDIA_DIR: /data/media

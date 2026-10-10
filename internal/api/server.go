@@ -59,6 +59,10 @@ func (s *Server) Handler() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
 			r.Get("/me", s.handleMe)
+			r.Get("/push/config", s.handlePushConfig)
+			r.Post("/push/subscriptions/status", s.handlePushStatus)
+			r.Post("/push/subscriptions", s.handleSubscribePush)
+			r.Delete("/push/subscriptions", s.handleUnsubscribePush)
 			r.Patch("/me", s.handleUpdateMe)
 			r.Get("/charges/me", s.handleMyCharges)
 			r.Post("/charges/{id}/pix", s.handleCreatePixCharge)

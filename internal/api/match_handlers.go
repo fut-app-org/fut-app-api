@@ -111,8 +111,15 @@ func (s *Server) handleGetMatch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	myResponse := "no_response"
+	for _, entry := range entries {
+		if entry.UserID == user.ID {
+			myResponse = entry.Response
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"match":          match,
+		"my_response":    myResponse,
 		"confirmations":  orEmpty(entries),
 		"teams":          orEmpty(teams),
 		"media":          orEmpty(media),
