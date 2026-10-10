@@ -56,7 +56,7 @@ type Client struct {
 }
 
 func New(public, private, subject string) *Client {
-	return &Client{public: public, private: private, subject: subject, http: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	return &Client{public: public, private: private, subject: strings.TrimPrefix(subject, "mailto:"), http: &http.Client{Timeout: 15 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
 }
 func (c *Client) Enabled() bool {
 	return c != nil && c.public != "" && c.private != "" && c.subject != ""

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdh"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	webpush "github.com/SherClockHolmes/webpush-go"
 	"io"
 	"net/http"
@@ -63,6 +64,23 @@ func TestEncryptedSendAndProviderErrors(t *testing.T) {
 		c.http.Transport = transportFunc(func(r *http.Request) (*http.Response, error) {
 			if r.Method != "POST" || r.Header.Get("Authorization") == "" || r.Header.Get("Content-Encoding") != "aes128gcm" {
 				t.Fatal("missing Web Push encryption/authentication")
+			}
+			authorization := r.Header.Get("Authorization")
+			token := strings.Split(strings.TrimPrefix(authorization, "vapid t="), ",")[0]
+			parts := strings.Split(token, ".")
+			if len(parts) != 3 {
+				t.Fatal("invalid VAPID token")
+			}
+			claimsJSON, err := base64.RawURLEncoding.DecodeString(parts[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+			var claims map[string]any
+			if err = json.Unmarshal(claimsJSON, &claims); err != nil {
+				t.Fatal(err)
+			}
+			if claims["sub"] != "mailto:admin@example.com" {
+				t.Fatalf("invalid VAPID subject: %v", claims["sub"])
 			}
 			b, err := io.ReadAll(r.Body)
 			if err != nil {
